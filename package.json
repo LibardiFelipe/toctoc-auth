@@ -1,6 +1,6 @@
 {
   "name": "toctoc-auth",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A simple auth library made for backend meatheads.",
   "keywords": [
     "auth",
