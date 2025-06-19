@@ -1,7 +1,7 @@
 import { createContext } from "react";
-import { type TocTocResult } from "../types/toctoc-result";
+import { TocTocResult } from "../types";
 
-type TocTocContextType = {
+type TocTocAuthContextType = {
   isAuthenticated: boolean;
   isAuthenticating: boolean;
   signUpWithCredentialsAsync: <TResponse>(
@@ -14,4 +14,4 @@ type TocTocContextType = {
   getUser: <TUser>() => TUser | undefined;
 };
 
-export const TocTocContext = createContext({} as TocTocContextType);
+export const TocTocAuthContext = createContext({} as TocTocAuthContextType);

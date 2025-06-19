@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useTocTocAuth } from "../hooks/use-toctoc";
+import { useTocTocAuth } from "../hooks";
 
 type TocTocProps = {
   reverse?: boolean;

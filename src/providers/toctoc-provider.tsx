@@ -1,23 +1,23 @@
-import { type ReactNode, useState } from "react";
-import { TocTocContext } from "../contexts/toctoc-context";
-import { credentialsService } from "../services/credentials-service";
-import { type TocTocResult } from "../types/toctoc-result";
-import { type TocTocAuthContent } from "../types/toctoc-auth-content";
-import { utils } from "../libs/utils";
-import { localStorageService } from "../services/localStorage-service";
+import { type ReactNode, useEffect, useState } from "react";
+import { TocTocAuthContent, TocTocResult } from "../types";
+import { credentialsService, localStorageService } from "../services";
+import { globals } from "../configs";
+import { utils } from "../libs";
+import { TocTocAuthContext } from "../contexts";
 
 export type TocTocAuthProviderConfig = {
   apiBaseUrl: string;
   encryptionKey: string;
   providers: {
     credentials?: {
+      refreshTokenApiRoute: string;
       signUpApiRoute: string;
       signInApiRoute: string;
       signInAfterSignUp: boolean;
-      redirectClientRoutes?: {
+      redirectClientRoutes: {
         afterSignUp?: string;
-        afterSignIn?: string;
-        afterSignOut?: string;
+        afterSignIn: string;
+        afterSignOut: string;
       };
       signInResponseJsonAccessTokenLocation: string[];
       signInResponseJsonRefreshTokenLocation: string[];
@@ -31,8 +31,6 @@ type TocTocAuthProviderProps = {
   children: ReactNode;
 };
 
-const CACHE_KEY = "toctoc-auth";
-
 export const TocTocAuthProvider = ({
   config,
   children,
@@ -44,18 +42,23 @@ export const TocTocAuthProvider = ({
     () => {
       try {
         return localStorageService.getItem<TocTocAuthContent>(
-          CACHE_KEY,
+          globals.cacheKey,
           config.encryptionKey
         );
       } catch (error) {
         console.error(
           `Error retrieving authentication content from localStorage: ${error}`
         );
-        localStorageService.removeItem(CACHE_KEY);
+        localStorageService.removeItem(globals.cacheKey);
         return null;
       }
     }
   );
+
+  useEffect(() => {
+    globals.setGlobalConfig(config);
+  }, [config]);
+
   const signUpWithCredentialsAsync = async <TApiResponse,>(
     data: object
   ): Promise<TocTocResult<TApiResponse>> => {
@@ -76,9 +79,9 @@ export const TocTocAuthProvider = ({
         );
 
         if (signInResponse.isSuccess) {
-          if (credentials.redirectClientRoutes?.afterSignIn) {
+          if (credentials?.redirectClientRoutes.afterSignIn) {
             window.location.replace(
-              credentials.redirectClientRoutes.afterSignIn
+              credentials?.redirectClientRoutes.afterSignIn
             );
           }
         }
@@ -86,7 +89,7 @@ export const TocTocAuthProvider = ({
         return signInResponse;
       }
 
-      if (credentials?.redirectClientRoutes?.afterSignUp) {
+      if (credentials?.redirectClientRoutes.afterSignUp) {
         window.location.replace(credentials.redirectClientRoutes.afterSignUp);
       }
 
@@ -131,10 +134,14 @@ export const TocTocAuthProvider = ({
         )!,
       };
 
-      localStorageService.setItem(CACHE_KEY, authContent, config.encryptionKey);
+      localStorageService.setItem(
+        globals.cacheKey,
+        authContent,
+        config.encryptionKey
+      );
       setAuthContent(authContent);
 
-      if (credentials?.redirectClientRoutes?.afterSignIn) {
+      if (credentials?.redirectClientRoutes.afterSignIn) {
         window.location.replace(credentials.redirectClientRoutes.afterSignIn);
       }
 
@@ -164,10 +171,10 @@ export const TocTocAuthProvider = ({
     // and call the signOut method of the provider.
 
     try {
-      localStorageService.removeItem(CACHE_KEY);
+      localStorageService.removeItem(globals.cacheKey);
       setAuthContent(null);
 
-      if (credentials?.redirectClientRoutes?.afterSignOut) {
+      if (credentials?.redirectClientRoutes.afterSignOut) {
         window.location.replace(credentials.redirectClientRoutes.afterSignOut);
       }
     } finally {
@@ -176,7 +183,7 @@ export const TocTocAuthProvider = ({
   };
 
   return (
-    <TocTocContext.Provider
+    <TocTocAuthContext.Provider
       value={{
         signUpWithCredentialsAsync,
         signInWithCredentialsAsync,
@@ -187,6 +194,6 @@ export const TocTocAuthProvider = ({
       }}
     >
       {children}
-    </TocTocContext.Provider>
+    </TocTocAuthContext.Provider>
   );
 };

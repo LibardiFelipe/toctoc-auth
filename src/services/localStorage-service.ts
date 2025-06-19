@@ -1,4 +1,4 @@
-import { cryptoService } from "./crypto-service";
+import { cryptoService } from ".";
 
 const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
   const item = localStorage.getItem(cacheKey);
