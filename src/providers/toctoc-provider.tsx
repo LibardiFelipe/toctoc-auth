@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { TocTocAuthContent, TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
 import { globals } from "../configs";
@@ -35,6 +35,8 @@ export const TocTocAuthProvider = ({
   config,
   children,
 }: TocTocAuthProviderProps) => {
+  globals.setGlobalConfig(config);
+
   const { credentials } = config.providers;
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -54,10 +56,6 @@ export const TocTocAuthProvider = ({
       }
     }
   );
-
-  useEffect(() => {
-    globals.setGlobalConfig(config);
-  }, [config]);
 
   const signUpWithCredentialsAsync = async <TApiResponse,>(
     data: object
