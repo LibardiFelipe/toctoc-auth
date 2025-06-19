@@ -9,6 +9,10 @@
     "authentication",
     "authorization"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LibardiFelipe/toctoc-auth"
+  },
   "license": "MIT",
   "author": "Felipe Libardi Gonçalves",
   "main": "dist/index.js",
