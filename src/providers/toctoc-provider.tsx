@@ -1,0 +1,192 @@
+import { type ReactNode, useState } from "react";
+import { TocTocContext } from "../contexts/toctoc-context";
+import { credentialsService } from "../services/credentials-service";
+import { type TocTocResult } from "../types/toctoc-result";
+import { type TocTocAuthContent } from "../types/toctoc-auth-content";
+import { utils } from "../libs/utils";
+import { localStorageService } from "../services/localStorage-service";
+
+export type TocTocAuthProviderConfig = {
+  apiBaseUrl: string;
+  encryptionKey: string;
+  providers: {
+    credentials?: {
+      signUpApiRoute: string;
+      signInApiRoute: string;
+      signInAfterSignUp: boolean;
+      redirectClientRoutes?: {
+        afterSignUp?: string;
+        afterSignIn?: string;
+        afterSignOut?: string;
+      };
+      signInResponseJsonAccessTokenLocation: string[];
+      signInResponseJsonRefreshTokenLocation: string[];
+      signInResponseJsonUserLocation?: string[];
+    };
+  };
+};
+
+type TocTocAuthProviderProps = {
+  config: TocTocAuthProviderConfig;
+  children: ReactNode;
+};
+
+const CACHE_KEY = "toctoc-auth";
+
+export const TocTocAuthProvider = ({
+  config,
+  children,
+}: TocTocAuthProviderProps) => {
+  const { credentials } = config.providers;
+
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authContent, setAuthContent] = useState<TocTocAuthContent | null>(
+    () => {
+      try {
+        return localStorageService.getItem<TocTocAuthContent>(
+          CACHE_KEY,
+          config.encryptionKey
+        );
+      } catch (error) {
+        console.error(
+          `Error retrieving authentication content from localStorage: ${error}`
+        );
+        localStorageService.removeItem(CACHE_KEY);
+        return null;
+      }
+    }
+  );
+  const signUpWithCredentialsAsync = async <TApiResponse,>(
+    data: object
+  ): Promise<TocTocResult<TApiResponse>> => {
+    setIsAuthenticating(true);
+    try {
+      const response = await credentialsService.registerAsync<TApiResponse>(
+        config,
+        data
+      );
+
+      if (!response.isSuccess) {
+        return response;
+      }
+
+      if (credentials?.signInAfterSignUp) {
+        const signInResponse = await signInWithCredentialsAsync<TApiResponse>(
+          data
+        );
+
+        if (signInResponse.isSuccess) {
+          if (credentials.redirectClientRoutes?.afterSignIn) {
+            window.location.replace(
+              credentials.redirectClientRoutes.afterSignIn
+            );
+          }
+        }
+
+        return signInResponse;
+      }
+
+      if (credentials?.redirectClientRoutes?.afterSignUp) {
+        window.location.replace(credentials.redirectClientRoutes.afterSignUp);
+      }
+
+      return response;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const signInWithCredentialsAsync = async <TApiResponse,>(
+    data: object
+  ): Promise<TocTocResult<TApiResponse>> => {
+    setIsAuthenticating(true);
+    try {
+      const response = await credentialsService.loginAsync<TApiResponse>(
+        config,
+        data
+      );
+
+      if (!response.isSuccess) {
+        return response;
+      }
+
+      const accessTokenPath = config.providers.credentials
+        ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
+      const refreshTokenPath = config.providers.credentials
+        ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
+
+      const userPath =
+        config.providers.credentials?.signInResponseJsonUserLocation ?? [];
+
+      const authContent: TocTocAuthContent = {
+        provider: "credentials",
+        user: utils.getNestedProperty<object>(response.responseBody, userPath),
+        accessToken: utils.getNestedProperty<string>(
+          response.responseBody,
+          accessTokenPath
+        )!,
+        refreshToken: utils.getNestedProperty<string>(
+          response.responseBody,
+          refreshTokenPath
+        )!,
+      };
+
+      localStorageService.setItem(CACHE_KEY, authContent, config.encryptionKey);
+      setAuthContent(authContent);
+
+      if (credentials?.redirectClientRoutes?.afterSignIn) {
+        window.location.replace(credentials.redirectClientRoutes.afterSignIn);
+      }
+
+      return response;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const getUser = <TUser,>(): TUser | undefined => {
+    const user = authContent?.user;
+    if (!user) {
+      console.error(
+        `User is not authenticated or property '${utils.nameOf(
+          () => config.providers.credentials?.signInResponseJsonUserLocation
+        )}' is not defined at config object. After fixing these problems, you will need to sign in again.`
+      );
+    }
+
+    return user as TUser;
+  };
+
+  const signOutAsync = async () => {
+    setIsAuthenticating(true);
+
+    // TODO: Read the authentication provider used to signIn
+    // and call the signOut method of the provider.
+
+    try {
+      localStorageService.removeItem(CACHE_KEY);
+      setAuthContent(null);
+
+      if (credentials?.redirectClientRoutes?.afterSignOut) {
+        window.location.replace(credentials.redirectClientRoutes.afterSignOut);
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  return (
+    <TocTocContext.Provider
+      value={{
+        signUpWithCredentialsAsync,
+        signInWithCredentialsAsync,
+        isAuthenticating,
+        isAuthenticated: !!authContent?.accessToken,
+        signOutAsync,
+        getUser,
+      }}
+    >
+      {children}
+    </TocTocContext.Provider>
+  );
+};
