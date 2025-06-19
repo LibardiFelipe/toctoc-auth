@@ -135,7 +135,7 @@ const refreshTokenAsync = async <TResponse>(
 
   const refreshUrl = `${baseUrl}${path}${refreshToken}`;
   const response = await fetch(refreshUrl, {
-    method: "GET",
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
