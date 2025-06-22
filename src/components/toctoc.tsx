@@ -1,19 +1,19 @@
 import { useEffect } from "react";
 import { useTocTocAuth } from "../hooks";
+import { useNavigate } from "react-router-dom";
 
 type TocTocProps = {
   reverse?: boolean;
   redirectTo: string;
   children: React.ReactNode;
-  loadingScreen?: React.ReactNode;
 };
 
 export const TocToc = ({
   children,
   redirectTo,
-  loadingScreen,
   reverse = false,
 }: TocTocProps) => {
+  const navigate = useNavigate();
   const { isAuthenticated } = useTocTocAuth();
 
   const shouldRedirect =
@@ -21,12 +21,12 @@ export const TocToc = ({
 
   useEffect(() => {
     if (shouldRedirect) {
-      window.location.replace(redirectTo);
+      navigate(redirectTo, { replace: true });
     }
-  }, [shouldRedirect]);
+  }, [shouldRedirect, navigate, redirectTo]);
 
   if (shouldRedirect) {
-    return loadingScreen ?? null;
+    return null;
   }
 
   return <>{children}</>;

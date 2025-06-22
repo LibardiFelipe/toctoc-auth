@@ -4,6 +4,7 @@ import { credentialsService, localStorageService } from "../services";
 import { globals } from "../configs";
 import { utils } from "../libs";
 import { TocTocAuthContext } from "../contexts";
+import { useNavigate } from "react-router-dom";
 
 export type TocTocAuthProviderConfig = {
   apiBaseUrl: string;
@@ -35,26 +36,16 @@ export const TocTocAuthProvider = ({
   config,
   children,
 }: TocTocAuthProviderProps) => {
-  globals.setGlobalConfig(config);
-
   const { credentials } = config.providers;
 
+  const navigate = useNavigate();
+  globals.setNavigateFunction(navigate);
+  globals.setGlobalConfig(config);
+
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authContent, setAuthContent] = useState<TocTocAuthContent | null>(
-    () => {
-      try {
-        return localStorageService.getItem<TocTocAuthContent>(
-          globals.cacheKey,
-          config.encryptionKey
-        );
-      } catch (error) {
-        console.error(
-          `Error retrieving authentication content from localStorage: ${error}`
-        );
-        localStorageService.removeItem(globals.cacheKey);
-        return null;
-      }
-    }
+  const authContent = localStorageService.getItem<TocTocAuthContent>(
+    globals.cacheKey,
+    config.encryptionKey
   );
 
   const signUpWithCredentialsAsync = async <TApiResponse,>(
@@ -78,8 +69,9 @@ export const TocTocAuthProvider = ({
 
         if (signInResponse.isSuccess) {
           if (credentials?.redirectClientRoutes.afterSignIn) {
-            window.location.replace(
-              credentials?.redirectClientRoutes.afterSignIn
+            globals.getNavigateFunction()(
+              credentials?.redirectClientRoutes.afterSignIn,
+              { replace: true }
             );
           }
         }
@@ -88,7 +80,10 @@ export const TocTocAuthProvider = ({
       }
 
       if (credentials?.redirectClientRoutes.afterSignUp) {
-        window.location.replace(credentials.redirectClientRoutes.afterSignUp);
+        globals.getNavigateFunction()(
+          credentials.redirectClientRoutes.afterSignUp,
+          { replace: true }
+        );
       }
 
       return response;
@@ -137,10 +132,12 @@ export const TocTocAuthProvider = ({
         authContent,
         config.encryptionKey
       );
-      setAuthContent(authContent);
 
       if (credentials?.redirectClientRoutes.afterSignIn) {
-        window.location.replace(credentials.redirectClientRoutes.afterSignIn);
+        globals.getNavigateFunction()(
+          credentials.redirectClientRoutes.afterSignIn,
+          { replace: true }
+        );
       }
 
       return response;
@@ -170,10 +167,12 @@ export const TocTocAuthProvider = ({
 
     try {
       localStorageService.removeItem(globals.cacheKey);
-      setAuthContent(null);
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
-        window.location.replace(credentials.redirectClientRoutes.afterSignOut);
+        globals.getNavigateFunction()(
+          credentials.redirectClientRoutes.afterSignOut,
+          { replace: true }
+        );
       }
     } finally {
       setIsAuthenticating(false);

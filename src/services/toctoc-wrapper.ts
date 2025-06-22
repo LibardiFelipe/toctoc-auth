@@ -103,6 +103,6 @@ export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
 const clearAndRedirect = (redirectRoute?: string) => {
   localStorageService.removeItem(globals.cacheKey);
   if (redirectRoute) {
-    window.location.replace(redirectRoute);
+    globals.getNavigateFunction()(redirectRoute, { replace: true });
   }
 };
