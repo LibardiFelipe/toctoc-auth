@@ -67,23 +67,28 @@ export const TocTocAuthProvider = ({
           data
         );
 
-        if (signInResponse.isSuccess) {
-          if (credentials?.redirectClientRoutes.afterSignIn) {
-            globals.getNavigateFunction()(
-              credentials?.redirectClientRoutes.afterSignIn,
-              { replace: true }
-            );
-          }
-        }
+        // if (signInResponse.isSuccess) {
+        //   if (redirectTo) {
+        //     globals.getNavigateFunction()(redirectTo, { replace: true });
+        //   }
+        // }
 
         return signInResponse;
       }
 
-      if (credentials?.redirectClientRoutes.afterSignUp) {
-        globals.getNavigateFunction()(
-          credentials.redirectClientRoutes.afterSignUp,
-          { replace: true }
-        );
+      const params = new URLSearchParams(window.location.search);
+      const param = params.get("redirect");
+      const target = param ?? credentials?.redirectClientRoutes.afterSignUp;
+
+      if (target) {
+        const newParams = new URLSearchParams();
+        newParams.set("skipTocToc", "true");
+
+        const url = `${target}?${newParams.toString()}`;
+
+        navigate(url, {
+          replace: true,
+        });
       }
 
       return response;
@@ -133,11 +138,19 @@ export const TocTocAuthProvider = ({
         config.encryptionKey
       );
 
-      if (credentials?.redirectClientRoutes.afterSignIn) {
-        globals.getNavigateFunction()(
-          credentials.redirectClientRoutes.afterSignIn,
-          { replace: true }
-        );
+      const params = new URLSearchParams(window.location.search);
+      const param = params.get("redirect");
+      const target = param ?? credentials?.redirectClientRoutes.afterSignIn;
+
+      if (target) {
+        const newParams = new URLSearchParams();
+        newParams.set("skipTocToc", "true");
+
+        const url = `${target}?${newParams.toString()}`;
+
+        navigate(url, {
+          replace: true,
+        });
       }
 
       return response;

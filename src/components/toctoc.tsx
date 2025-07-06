@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { JSX, useEffect } from "react";
 import { useTocTocAuth } from "../hooks";
 import { useNavigate } from "react-router-dom";
 
@@ -12,18 +12,38 @@ export const TocToc = ({
   children,
   redirectTo,
   reverse = false,
-}: TocTocProps) => {
+}: TocTocProps): JSX.Element | null => {
   const navigate = useNavigate();
   const { isAuthenticated } = useTocTocAuth();
+  const currentPath = window.location.pathname;
+
+  const params = new URLSearchParams(window.location.search);
+  const skipTocToc = params.get("skipTocToc") === "true";
 
   const shouldRedirect =
-    (reverse && isAuthenticated) || (!reverse && !isAuthenticated);
+    !skipTocToc &&
+    ((reverse && isAuthenticated) || (!reverse && !isAuthenticated));
 
   useEffect(() => {
     if (shouldRedirect) {
-      navigate(redirectTo, { replace: true });
+      navigate(`${redirectTo}?redirect=${currentPath}`, {
+        replace: true,
+      });
     }
-  }, [shouldRedirect, navigate, redirectTo]);
+  }, [shouldRedirect, navigate, redirectTo, currentPath]);
+
+  useEffect(() => {
+    if (skipTocToc) {
+      const newParams = new URLSearchParams();
+      params.delete("skipTocToc");
+
+      const url = `${currentPath}?${newParams.toString()}`;
+
+      navigate(url, {
+        replace: true,
+      });
+    }
+  }, [skipTocToc, navigate, currentPath]);
 
   if (shouldRedirect) {
     return null;
