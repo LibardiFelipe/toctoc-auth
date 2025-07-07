@@ -34,10 +34,10 @@ export const TocToc = ({
 
   useEffect(() => {
     if (skipTocToc) {
-      const newParams = new URLSearchParams();
+      const params = new URLSearchParams(window.location.search);
       params.delete("skipTocToc");
 
-      const url = `${currentPath}?${newParams.toString()}`;
+      const url = `${currentPath}?${params.toString()}`;
 
       navigate(url, {
         replace: true,
