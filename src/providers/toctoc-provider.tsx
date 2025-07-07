@@ -81,10 +81,12 @@ export const TocTocAuthProvider = ({
       const target = param ?? credentials?.redirectClientRoutes.afterSignUp;
 
       if (target) {
-        const newParams = new URLSearchParams();
-        newParams.set("skipTocToc", "true");
+        params.delete("redirect");
+        params.set("skipTocToc", "true");
 
-        const url = `${target}?${newParams.toString()}`;
+        const url = `${target}${
+          params.toString() ? `?${params.toString()}` : ""
+        }`;
 
         navigate(url, {
           replace: true,
@@ -143,10 +145,12 @@ export const TocTocAuthProvider = ({
       const target = param ?? credentials?.redirectClientRoutes.afterSignIn;
 
       if (target) {
-        const newParams = new URLSearchParams();
-        newParams.set("skipTocToc", "true");
+        params.delete("redirect");
+        params.set("skipTocToc", "true");
 
-        const url = `${target}?${newParams.toString()}`;
+        const url = `${target}${
+          params.toString() ? `?${params.toString()}` : ""
+        }`;
 
         navigate(url, {
           replace: true,
