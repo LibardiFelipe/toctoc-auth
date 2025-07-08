@@ -26,7 +26,14 @@ export const TocToc = ({
 
   useEffect(() => {
     if (shouldRedirect) {
-      navigate(`${redirectTo}?redirect=${currentPath}`, {
+      const rawParams = new URLSearchParams(window.location.search);
+      rawParams.delete("skipTocToc");
+
+      const fullPath = `${currentPath}${
+        rawParams.toString() ? `?${rawParams.toString()}` : ""
+      }`;
+
+      navigate(`${redirectTo}?redirect=${encodeURIComponent(fullPath)}`, {
         replace: true,
       });
     }
@@ -37,7 +44,8 @@ export const TocToc = ({
       const params = new URLSearchParams(window.location.search);
       params.delete("skipTocToc");
 
-      const url = `${currentPath}?${params.toString()}`;
+      const cleanedQuery = params.toString();
+      const url = cleanedQuery ? `${currentPath}?${cleanedQuery}` : currentPath;
 
       navigate(url, {
         replace: true,
