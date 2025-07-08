@@ -1,6 +1,6 @@
 import React, { JSX, useEffect } from "react";
 import { useTocTocAuth } from "../hooks";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 type TocTocProps = {
   reverse?: boolean;
@@ -13,45 +13,41 @@ export const TocToc = ({
   redirectTo,
   reverse = false,
 }: TocTocProps): JSX.Element | null => {
-  const navigate = useNavigate();
   const { isAuthenticated } = useTocTocAuth();
-  const currentPath = window.location.pathname;
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const params = new URLSearchParams(window.location.search);
-  const skipTocToc = params.get("skipTocToc") === "true";
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const hasRedirectParam = !!redirectParam;
+  const shouldSkipTocToc =
+    searchParams.get("skipTocToc") === "true" && hasRedirectParam;
 
   const shouldRedirect =
-    !skipTocToc &&
-    ((reverse && isAuthenticated) || (!reverse && !isAuthenticated));
+    (reverse && isAuthenticated) || (!reverse && !isAuthenticated);
 
   useEffect(() => {
-    if (shouldRedirect) {
-      const rawParams = new URLSearchParams(window.location.search);
-      rawParams.delete("skipTocToc");
+    if (shouldRedirect && !shouldSkipTocToc) {
+      const pathName = location.pathname;
+      const params = searchParams.toString();
+      const redirect = `${pathName}?${params}`;
+      const linkFinal = `${redirectTo}?redirect=${encodeURIComponent(
+        redirect
+      )}`;
+      console.log("linkFinal: ", linkFinal);
 
-      const fullPath = `${currentPath}${
-        rawParams.toString() ? `?${rawParams.toString()}` : ""
-      }`;
-
-      navigate(`${redirectTo}?redirect=${encodeURIComponent(fullPath)}`, {
+      navigate(linkFinal, {
         replace: true,
       });
     }
-  }, [shouldRedirect, navigate, redirectTo, currentPath]);
-
-  useEffect(() => {
-    if (skipTocToc) {
-      const params = new URLSearchParams(window.location.search);
-      params.delete("skipTocToc");
-
-      const cleanedQuery = params.toString();
-      const url = cleanedQuery ? `${currentPath}?${cleanedQuery}` : currentPath;
-
-      navigate(url, {
-        replace: true,
-      });
-    }
-  }, [skipTocToc, navigate, currentPath]);
+  }, [
+    searchParams,
+    shouldSkipTocToc,
+    shouldRedirect,
+    navigate,
+    redirectTo,
+    location,
+  ]);
 
   if (shouldRedirect) {
     return null;

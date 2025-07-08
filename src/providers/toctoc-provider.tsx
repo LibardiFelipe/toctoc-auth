@@ -4,7 +4,7 @@ import { credentialsService, localStorageService } from "../services";
 import { globals } from "../configs";
 import { utils } from "../libs";
 import { TocTocAuthContext } from "../contexts";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 export type TocTocAuthProviderConfig = {
   apiBaseUrl: string;
@@ -48,6 +48,8 @@ export const TocTocAuthProvider = ({
     config.encryptionKey
   );
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const signUpWithCredentialsAsync = async <TApiResponse,>(
     data: object
   ): Promise<TocTocResult<TApiResponse>> => {
@@ -67,30 +69,18 @@ export const TocTocAuthProvider = ({
           data
         );
 
-        // if (signInResponse.isSuccess) {
-        //   if (redirectTo) {
-        //     globals.getNavigateFunction()(redirectTo, { replace: true });
-        //   }
-        // }
-
         return signInResponse;
       }
 
-      const params = new URLSearchParams(window.location.search);
-      const param = params.get("redirect");
-      const target = param ?? credentials?.redirectClientRoutes.afterSignUp;
+      const target = decodeURIComponent(
+        searchParams.get("redirect") ??
+          credentials?.redirectClientRoutes.afterSignUp ??
+          ""
+      );
+      console.log("target: ", target);
 
       if (target) {
-        params.delete("redirect");
-        params.set("skipTocToc", "true");
-
-        const url = `${target}${
-          params.toString() ? `?${params.toString()}` : ""
-        }`;
-
-        navigate(url, {
-          replace: true,
-        });
+        navigate(target, { replace: true });
       }
 
       return response;
@@ -140,21 +130,15 @@ export const TocTocAuthProvider = ({
         config.encryptionKey
       );
 
-      const params = new URLSearchParams(window.location.search);
-      const param = params.get("redirect");
-      const target = param ?? credentials?.redirectClientRoutes.afterSignIn;
+      const target = decodeURIComponent(
+        searchParams.get("redirect") ??
+          credentials?.redirectClientRoutes.afterSignIn ??
+          ""
+      );
+      console.log("target: ", target);
 
       if (target) {
-        params.delete("redirect");
-        params.set("skipTocToc", "true");
-
-        const url = `${target}${
-          params.toString() ? `?${params.toString()}` : ""
-        }`;
-
-        navigate(url, {
-          replace: true,
-        });
+        navigate(target, { replace: true });
       }
 
       return response;
