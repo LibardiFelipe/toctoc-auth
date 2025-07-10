@@ -1,5 +1,5 @@
 import { utils } from "../libs";
-import { TocTocAuthProviderConfig, TocTocResult } from "../types";
+import { type TocTocAuthProviderConfig, type TocTocResult } from "../types";
 
 const { nameOf, hasNestedProperty } = utils;
 

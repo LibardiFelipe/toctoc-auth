@@ -1,4 +1,4 @@
-import React, { JSX, useEffect } from "react";
+import React, { type JSX, useEffect } from "react";
 import { useTocTocAuth } from "../hooks";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -14,42 +14,49 @@ export const TocToc = ({
   reverse = false,
 }: TocTocProps): JSX.Element | null => {
   const { isAuthenticated } = useTocTocAuth();
+
   const navigate = useNavigate();
   const location = useLocation();
-
   const [searchParams] = useSearchParams();
-  const redirectParam = searchParams.get("redirect");
-  const hasRedirectParam = !!redirectParam;
-  const shouldSkipTocToc =
-    searchParams.get("skipTocToc") === "true" && hasRedirectParam;
 
-  const shouldRedirect =
-    (reverse && isAuthenticated) || (!reverse && !isAuthenticated);
+  const currentPath = location.pathname;
+
+  const shouldRedirectNormal = !isAuthenticated && !reverse;
+  const shouldRedirectReverse = isAuthenticated && reverse;
 
   useEffect(() => {
-    if (shouldRedirect && !shouldSkipTocToc) {
-      const pathName = location.pathname;
-      const params = searchParams.toString();
-      const redirect = `${pathName}?${params}`;
-      const linkFinal = `${redirectTo}?redirect=${encodeURIComponent(
-        redirect
-      )}`;
-      console.log("linkFinal: ", linkFinal);
+    if (shouldRedirectNormal) {
+      const currentSearchParams = searchParams.toString().trim();
+      const hasSearchParams = currentSearchParams.length > 2;
 
-      navigate(linkFinal, {
-        replace: true,
-      });
+      const target =
+        redirectTo +
+        "?" +
+        "redirect=" +
+        encodeURIComponent(
+          `${currentPath}${hasSearchParams ? `?${currentSearchParams}` : ""}`
+        );
+      navigate(target, { replace: true });
     }
-  }, [
-    searchParams,
-    shouldSkipTocToc,
-    shouldRedirect,
-    navigate,
-    redirectTo,
-    location,
-  ]);
+  }, [shouldRedirectNormal, searchParams, currentPath, navigate]);
 
-  if (shouldRedirect) {
+  useEffect(() => {
+    if (shouldRedirectReverse) {
+      const redirectSearchParam =
+        searchParams.get("redirect")?.toString()?.trim() ?? "";
+      const hasRedirectParam = redirectSearchParam.length > 2;
+
+      if (!hasRedirectParam) {
+        navigate(redirectTo, { replace: true });
+        return;
+      }
+
+      const target = decodeURIComponent(redirectSearchParam ?? redirectTo);
+      navigate(target, { replace: true });
+    }
+  }, [shouldRedirectReverse, searchParams, currentPath, navigate]);
+
+  if (shouldRedirectNormal || shouldRedirectReverse) {
     return null;
   }
 

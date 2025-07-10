@@ -1,6 +1,9 @@
-import { NavigateFunction } from "react-router-dom";
+import { type NavigateFunction } from "react-router-dom";
 import { localStorageService } from "../services";
-import { TocTocAuthContent, TocTocAuthProviderConfig } from "../types";
+import {
+  type TocTocAuthContent,
+  type TocTocAuthProviderConfig,
+} from "../types";
 
 const cacheKey = "toctoc-auth";
 

@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { TocTocResult } from "../types";
+import { type TocTocResult } from "../types";
 
 type TocTocAuthContextType = {
   isAuthenticated: boolean;

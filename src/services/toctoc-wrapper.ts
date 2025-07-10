@@ -1,8 +1,8 @@
-import { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 import { globals } from "../configs";
 import { credentialsService, localStorageService } from ".";
 import { utils } from "../libs";
-import { TocTocAuthContent } from "../types";
+import { type TocTocAuthContent } from "../types";
 
 export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
   const globalConfig = globals.getGlobalConfig();

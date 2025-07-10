@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from "react";
-import { TocTocAuthContent, TocTocResult } from "../types";
+import { type TocTocAuthContent, type TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
 import { globals } from "../configs";
 import { utils } from "../libs";
 import { TocTocAuthContext } from "../contexts";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type TocTocAuthProviderConfig = {
   apiBaseUrl: string;
@@ -48,7 +48,7 @@ export const TocTocAuthProvider = ({
     config.encryptionKey
   );
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const signUpWithCredentialsAsync = async <TApiResponse,>(
     data: object
@@ -77,7 +77,6 @@ export const TocTocAuthProvider = ({
           credentials?.redirectClientRoutes.afterSignUp ??
           ""
       );
-      console.log("target: ", target);
 
       if (target) {
         navigate(target, { replace: true });
@@ -135,7 +134,6 @@ export const TocTocAuthProvider = ({
           credentials?.redirectClientRoutes.afterSignIn ??
           ""
       );
-      console.log("target: ", target);
 
       if (target) {
         navigate(target, { replace: true });
