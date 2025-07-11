@@ -67,6 +67,9 @@ const App = () => {
 };
 ```
 
+> **Important:**
+> If you set `signInAfterSignUp: true`, the data sent to the signUp endpoint will be reused for the signIn endpoint immediately after registration. Therefore, your signIn endpoint must accept the same properties as your signUp endpoint (e.g., if you register with `email` and `password`, your login must also accept `email` and `password`).
+
 ### 2. Use Authentication Hooks in Your Components
 
 ```tsx
@@ -113,11 +116,7 @@ TocToc provides a simple component to protect routes based on authentication sta
 import { TocToc } from "toctoc-auth";
 
 const PrivateRoute = ({ children }) => {
-  return (
-    <TocToc redirectTo="/login" loadingScreen={<div>Loading...</div>}>
-      {children}
-    </TocToc>
-  );
+  return <TocToc redirectTo="/login">{children}</TocToc>;
 };
 ```
 
@@ -126,16 +125,15 @@ For public routes that should redirect authenticated users:
 ```tsx
 const PublicRoute = ({ children }) => {
   return (
-    <TocToc
-      reverse={true}
-      redirectTo="/dashboard"
-      loadingScreen={<div>Loading...</div>}
-    >
+    <TocToc reverse={true} redirectTo="/dashboard">
       {children}
     </TocToc>
   );
 };
 ```
+
+- `redirectTo`: Path to redirect if the user is not authenticated (or is authenticated and `reverse` is true).
+- `reverse`: If true, redirects authenticated users instead of unauthenticated ones.
 
 ### 4. Access User Information
 
@@ -175,6 +173,19 @@ const fetchData = async () => {
 };
 ```
 
+- The wrapper will automatically attach the access token to requests and handle token refresh on 401 errors. If the refresh fails, the user will be signed out and redirected.
+
+## Authentication Context API
+
+The authentication context provides the following properties and methods via the `useTocTocAuth` hook:
+
+- `isAuthenticated: boolean` — Whether the user is currently authenticated.
+- `isAuthenticating: boolean` — Whether an authentication operation is in progress.
+- `signUpWithCredentialsAsync(data): Promise<TocTocResult>` — Register a new user.
+- `signInWithCredentialsAsync(data): Promise<TocTocResult>` — Sign in with credentials.
+- `signOutAsync(): Promise<void>` — Sign out the current user.
+- `getUser<TUser>(): TUser | undefined` — Get the current user object (type-safe).
+
 ## Configuration Options
 
 ### TocTocAuthProviderConfig
@@ -197,6 +208,9 @@ const fetchData = async () => {
 | `signInResponseJsonAccessTokenLocation`  | string[] | Path to access token in API response                |
 | `signInResponseJsonRefreshTokenLocation` | string[] | Path to refresh token in API response               |
 | `signInResponseJsonUserLocation`         | string[] | Path to user data in API response (optional)        |
+
+> **Note:**
+> If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to `signInApiRoute` after registration. Make sure both endpoints accept the same payload structure.
 
 ## Security Considerations
 
