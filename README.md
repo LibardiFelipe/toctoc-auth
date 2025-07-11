@@ -37,28 +37,28 @@ Wrap your application with the `TocTocAuthProvider` and provide your configurati
 ```tsx
 import { TocTocAuthProvider } from "toctoc-auth";
 
-const App = () => {
-  const authConfig = {
-    apiBaseUrl: "https://api.example.com",
-    encryptionKey: "your-strong-encryption-key",
-    providers: {
-      credentials: {
-        signUpApiRoute: "/auth/register",
-        signInApiRoute: "/auth/login",
-        refreshTokenApiRoute: "/auth/refresh/",
-        signInAfterSignUp: true,
-        redirectClientRoutes: {
-          afterSignUp: "/complete-profile",
-          afterSignIn: "/dashboard",
-          afterSignOut: "/login",
-        },
-        signInResponseJsonAccessTokenLocation: ["accessToken"],
-        signInResponseJsonRefreshTokenLocation: ["refreshToken"],
-        signInResponseJsonUserLocation: ["user"],
+export const authConfig = {
+  apiBaseUrl: "https://api.example.com",
+  encryptionKey: "your-strong-encryption-key",
+  providers: {
+    credentials: {
+      signUpApiRoute: "/auth/register",
+      signInApiRoute: "/auth/login",
+      refreshTokenApiRoute: "/auth/refresh/",
+      signInAfterSignUp: true,
+      redirectClientRoutes: {
+        afterSignUp: "/complete-profile",
+        afterSignIn: "/dashboard",
+        afterSignOut: "/login",
       },
+      signInResponseJsonAccessTokenLocation: ["accessToken"],
+      signInResponseJsonRefreshTokenLocation: ["refreshToken"],
+      signInResponseJsonUserLocation: ["user"],
     },
-  };
+  },
+};
 
+const App = () => {
   return (
     <TocTocAuthProvider config={authConfig}>
       <YourApp />
@@ -160,12 +160,13 @@ TocToc provides an Axios wrapper that automatically adds authentication headers 
 ```tsx
 import axios from "axios";
 import { withTocTocAxiosWrapper } from "toctoc-auth";
+import { authConfig } from "../App";
 
 const api = axios.create({
   baseURL: "https://api.example.com",
 });
 
-const authenticatedApi = withTocTocAxiosWrapper(api);
+const authenticatedApi = withTocTocAxiosWrapper(authConfig, api);
 
 const fetchData = async () => {
   const response = await authenticatedApi.get("/protected-resource");

@@ -6,7 +6,7 @@ import { utils } from "../libs";
 import { TocTocAuthContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-export type TocTocAuthProviderConfig = {
+export type TocTocAuthConfig = {
   apiBaseUrl: string;
   encryptionKey: string;
   providers: {
@@ -28,7 +28,7 @@ export type TocTocAuthProviderConfig = {
 };
 
 type TocTocAuthProviderProps = {
-  config: TocTocAuthProviderConfig;
+  config: TocTocAuthConfig;
   children: ReactNode;
 };
 

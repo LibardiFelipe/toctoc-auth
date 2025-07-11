@@ -1,10 +1,10 @@
 import { utils } from "../libs";
-import { type TocTocAuthProviderConfig, type TocTocResult } from "../types";
+import { type TocTocAuthConfig, type TocTocResult } from "../types";
 
 const { nameOf, hasNestedProperty } = utils;
 
 const registerAsync = async <TResponse>(
-  config: TocTocAuthProviderConfig,
+  config: TocTocAuthConfig,
   data: object
 ): Promise<TocTocResult<TResponse>> => {
   const baseUrl = config.apiBaseUrl;
@@ -34,7 +34,7 @@ const registerAsync = async <TResponse>(
 };
 
 const loginAsync = async <TResponse>(
-  config: TocTocAuthProviderConfig,
+  config: TocTocAuthConfig,
   data: object
 ): Promise<TocTocResult<TResponse>> => {
   const baseUrl = config.apiBaseUrl;
@@ -114,7 +114,7 @@ const loginAsync = async <TResponse>(
 };
 
 const refreshTokenAsync = async <TResponse>(
-  config: TocTocAuthProviderConfig,
+  config: TocTocAuthConfig,
   refreshToken: string
 ): Promise<TocTocResult<TResponse>> => {
   const baseUrl = config.apiBaseUrl;

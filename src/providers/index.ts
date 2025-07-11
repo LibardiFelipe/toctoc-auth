@@ -1,1 +1,1 @@
-export { TocTocAuthProvider } from "./toctoc-provider";
+export { TocTocAuthProvider, type TocTocAuthConfig } from "./toctoc-provider";

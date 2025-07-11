@@ -2,12 +2,14 @@ import { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 import { globals } from "../configs";
 import { credentialsService, localStorageService } from ".";
 import { utils } from "../libs";
-import { type TocTocAuthContent } from "../types";
+import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
 
-export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
-  const globalConfig = globals.getGlobalConfig();
+export const withTocTocAxiosWrapper = (
+  config: TocTocAuthConfig,
+  api: AxiosInstance
+): AxiosInstance => {
   const signOutRedirectRoute =
-    globalConfig.providers.credentials?.redirectClientRoutes.afterSignOut;
+    config.providers.credentials?.redirectClientRoutes.afterSignOut;
   const cacheKey = globals.cacheKey;
 
   api.interceptors.request.use(
@@ -34,7 +36,7 @@ export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
           const authContent = globals.getAuthContent();
           if (authContent?.refreshToken) {
             const response = await credentialsService.refreshTokenAsync(
-              globalConfig,
+              config,
               authContent.refreshToken
             );
 
@@ -43,13 +45,13 @@ export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
               clearAndRedirect(signOutRedirectRoute);
             }
 
-            const accessTokenPath = globalConfig.providers.credentials
+            const accessTokenPath = config.providers.credentials
               ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
-            const refreshTokenPath = globalConfig.providers.credentials
+            const refreshTokenPath = config.providers.credentials
               ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
             const userPath =
-              globalConfig.providers.credentials
-                ?.signInResponseJsonUserLocation ?? [];
+              config.providers.credentials?.signInResponseJsonUserLocation ??
+              [];
 
             const newAccessToken = utils.getNestedProperty<string>(
               response.responseBody,
@@ -77,7 +79,7 @@ export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
             localStorageService.setItem(
               cacheKey,
               updatedAuthContent,
-              globalConfig.encryptionKey
+              config.encryptionKey
             );
 
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -103,6 +105,6 @@ export const withTocTocAxiosWrapper = (api: AxiosInstance): AxiosInstance => {
 const clearAndRedirect = (redirectRoute?: string) => {
   localStorageService.removeItem(globals.cacheKey);
   if (redirectRoute) {
-    globals.getNavigateFunction()(redirectRoute, { replace: true });
+    window.location.replace(redirectRoute);
   }
 };
