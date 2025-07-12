@@ -46,11 +46,11 @@ export const withTocTocAxiosWrapper = (
             }
 
             const accessTokenPath = config.providers.credentials
-              ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
+              ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
             const refreshTokenPath = config.providers.credentials
-              ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
+              ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
             const userPath =
-              config.providers.credentials?.signInResponseJsonUserLocation ??
+              config.providers.credentials?.signInJsonResponseUser?.location ??
               [];
 
             const newAccessToken = utils.getNestedProperty<string>(

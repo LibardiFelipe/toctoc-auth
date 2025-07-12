@@ -4,13 +4,13 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 type TocTocProps = {
   reverse?: boolean;
-  redirectTo: string;
+  to: string;
   children: React.ReactNode;
 };
 
-export const TocToc = ({
+export const TocTocRedirect = ({
   children,
-  redirectTo,
+  to,
   reverse = false,
 }: TocTocProps): JSX.Element | null => {
   const { isAuthenticated } = useTocTocAuth();
@@ -30,7 +30,7 @@ export const TocToc = ({
       const hasSearchParams = currentSearchParams.length > 2;
 
       const target =
-        redirectTo +
+        to +
         "?" +
         "redirect=" +
         encodeURIComponent(
@@ -47,11 +47,11 @@ export const TocToc = ({
       const hasRedirectParam = redirectSearchParam.length > 2;
 
       if (!hasRedirectParam) {
-        navigate(redirectTo, { replace: true });
+        navigate(to, { replace: true });
         return;
       }
 
-      const target = decodeURIComponent(redirectSearchParam ?? redirectTo);
+      const target = decodeURIComponent(redirectSearchParam ?? to);
       navigate(target, { replace: true });
     }
   }, [shouldRedirectReverse, searchParams, currentPath, navigate]);

@@ -20,9 +20,12 @@ export type TocTocAuthConfig = {
         afterSignIn: string;
         afterSignOut: string;
       };
-      signInResponseJsonAccessTokenLocation: string[];
-      signInResponseJsonRefreshTokenLocation: string[];
-      signInResponseJsonUserLocation?: string[];
+      signInJsonResponseAccessTokenLocation: string[];
+      signInJsonResponseRefreshTokenLocation: string[];
+      signInJsonResponseUser?: {
+        location: string[];
+        roleLocation?: string[];
+      };
     };
   };
 };
@@ -39,7 +42,6 @@ export const TocTocAuthProvider = ({
   const { credentials } = config.providers;
 
   const navigate = useNavigate();
-  globals.setNavigateFunction(navigate);
   globals.setGlobalConfig(config);
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -103,12 +105,12 @@ export const TocTocAuthProvider = ({
       }
 
       const accessTokenPath = config.providers.credentials
-        ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
+        ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
       const refreshTokenPath = config.providers.credentials
-        ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
+        ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
 
       const userPath =
-        config.providers.credentials?.signInResponseJsonUserLocation ?? [];
+        config.providers.credentials?.signInJsonResponseUser?.location ?? [];
 
       const authContent: TocTocAuthContent = {
         provider: "credentials",
@@ -147,31 +149,19 @@ export const TocTocAuthProvider = ({
 
   const getUser = <TUser,>(): TUser | undefined => {
     const user = authContent?.user;
-    if (!user) {
-      console.error(
-        `User is not authenticated or property '${utils.nameOf(
-          () => config.providers.credentials?.signInResponseJsonUserLocation
-        )}' is not defined at config object. After fixing these problems, you will need to sign in again.`
-      );
-    }
-
-    return user as TUser;
+    return user as TUser | undefined;
   };
 
   const signOutAsync = async () => {
     setIsAuthenticating(true);
 
-    // TODO: Read the authentication provider used to signIn
-    // and call the signOut method of the provider.
-
     try {
       localStorageService.removeItem(globals.cacheKey);
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
-        globals.getNavigateFunction()(
-          credentials.redirectClientRoutes.afterSignOut,
-          { replace: true }
-        );
+        navigate(credentials.redirectClientRoutes.afterSignOut, {
+          replace: true,
+        });
       }
     } finally {
       setIsAuthenticating(false);

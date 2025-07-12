@@ -51,9 +51,12 @@ export const authConfig = {
         afterSignIn: "/dashboard",
         afterSignOut: "/login",
       },
-      signInResponseJsonAccessTokenLocation: ["accessToken"],
-      signInResponseJsonRefreshTokenLocation: ["refreshToken"],
-      signInResponseJsonUserLocation: ["user"],
+      signInJsonResponseAccessTokenLocation: ["accessToken"],
+      signInJsonResponseRefreshTokenLocation: ["refreshToken"],
+      signInJsonResponseUser: {
+        location: ["user"],
+        roleLocation: ["role"], // user's role will be searched at locations + roleLocation (user.role)
+      },
     },
   },
 };
@@ -110,13 +113,13 @@ const LoginForm = () => {
 
 ### 3. Protect Routes
 
-TocToc provides a simple component to protect routes based on authentication status:
+TocToc provides a component to protect routes based on authentication status:
 
 ```tsx
-import { TocToc } from "toctoc-auth";
+import { TocTocRedirect } from "toctoc-auth";
 
 const PrivateRoute = ({ children }) => {
-  return <TocToc redirectTo="/login">{children}</TocToc>;
+  return <TocTocRedirect to="/login">{children}</TocTocRedirect>;
 };
 ```
 
@@ -125,17 +128,42 @@ For public routes that should redirect authenticated users:
 ```tsx
 const PublicRoute = ({ children }) => {
   return (
-    <TocToc reverse={true} redirectTo="/dashboard">
+    <TocTocRedirect reverse={true} to="/dashboard">
       {children}
-    </TocToc>
+    </TocTocRedirect>
   );
 };
 ```
 
-- `redirectTo`: Path to redirect if the user is not authenticated (or is authenticated and `reverse` is true).
-- `reverse`: If true, redirects authenticated users instead of unauthenticated ones.
+> **Important:**
+> This is a client-side protection mechanism, so you should also implement server-side authentication/authorization to ensure the security of your application.
 
-### 4. Access User Information
+### 4. Protect Components
+
+TocToc also provides a component to "protect" and blur other components based on the user role:
+
+```tsx
+import { TocTocGuard } from "toctoc-auth";
+
+const App = () => {
+  return (
+    <TocTocGuard<EUserRole>
+      allowedRoles={["Moderator", "Admin"]}
+      lockIcon={<LockOutlined />}
+    >
+      <MyProtectedComponent />
+    </TocTocGuard>
+  );
+};
+```
+
+- `allowedRoles`: An array of allowed roles.
+- `lockIcon`: A component that will be used as a protection icon if user role is not allowed.
+
+> **Important:**
+> This is a client-side protection mechanism, so you should also implement server-side authorization to ensure specific permissions.
+
+### 5. Access User Information
 
 ```tsx
 import { useTocTocAuth } from "toctoc-auth";
@@ -153,7 +181,7 @@ const Profile = () => {
 };
 ```
 
-### 5. Add Authentication to API Requests
+### 6. Add Authentication to API Requests
 
 TocToc provides an Axios wrapper that automatically adds authentication headers and handles token refresh:
 

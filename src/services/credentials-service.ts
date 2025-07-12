@@ -40,10 +40,13 @@ const loginAsync = async <TResponse>(
   const baseUrl = config.apiBaseUrl;
   const path = config.providers.credentials?.signInApiRoute;
   const accessTokenPath = config.providers.credentials
-    ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
+    ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
   const refreshTokenPath = config.providers.credentials
-    ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
-  const userPath = config.providers.credentials?.signInResponseJsonUserLocation;
+    ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
+  const userPath =
+    config.providers.credentials?.signInJsonResponseUser?.location;
+  const rolePath =
+    config.providers.credentials?.signInJsonResponseUser?.roleLocation;
 
   if (!path) {
     throw new Error(
@@ -107,6 +110,19 @@ const loginAsync = async <TResponse>(
     );
   }
 
+  if (rolePath) {
+    const roleLocation = userPath?.concat(rolePath) ?? [];
+    if (!hasNestedProperty(body, roleLocation)) {
+      throw new Error(
+        `The response body from '${nameOf(
+          () => config.providers.credentials?.signInApiRoute
+        )}' endpoint does not contain the expected '${roleLocation.join(
+          "."
+        )}' property. Please check the API implementation.`
+      );
+    }
+  }
+
   return {
     isSuccess: response.ok,
     responseBody: body,
@@ -120,10 +136,11 @@ const refreshTokenAsync = async <TResponse>(
   const baseUrl = config.apiBaseUrl;
   const path = config.providers.credentials?.refreshTokenApiRoute;
   const accessTokenPath = config.providers.credentials
-    ?.signInResponseJsonAccessTokenLocation ?? ["accessToken"];
+    ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
   const refreshTokenPath = config.providers.credentials
-    ?.signInResponseJsonRefreshTokenLocation ?? ["refreshToken"];
-  const userPath = config.providers.credentials?.signInResponseJsonUserLocation;
+    ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
+  const userPath =
+    config.providers.credentials?.signInJsonResponseUser?.location;
 
   if (!path) {
     throw new Error(
