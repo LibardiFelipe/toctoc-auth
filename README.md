@@ -44,7 +44,7 @@ export const authConfig = {
     credentials: {
       signUpApiRoute: "/auth/register",
       signInApiRoute: "/auth/login",
-      refreshTokenApiRoute: "/auth/refresh/",
+      refreshTokenApiRoute: "/auth/refresh",
       signInAfterSignUp: true,
       redirectClientRoutes: {
         afterSignUp: "/complete-profile",
@@ -227,19 +227,36 @@ The authentication context provides the following properties and methods via the
 
 ### Credentials Provider Configuration
 
-| Property                                 | Type     | Description                                         |
-| ---------------------------------------- | -------- | --------------------------------------------------- |
-| `signUpApiRoute`                         | string   | API endpoint for user registration                  |
-| `signInApiRoute`                         | string   | API endpoint for user login                         |
-| `refreshTokenApiRoute`                   | string   | API endpoint for token refresh                      |
-| `signInAfterSignUp`                      | boolean  | Whether to automatically sign in after registration |
-| `redirectClientRoutes`                   | object   | Routes for redirection after auth actions           |
-| `signInResponseJsonAccessTokenLocation`  | string[] | Path to access token in API response                |
-| `signInResponseJsonRefreshTokenLocation` | string[] | Path to refresh token in API response               |
-| `signInResponseJsonUserLocation`         | string[] | Path to user data in API response (optional)        |
+| Property                                 | Type     | Description                                                             |
+| ---------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| `signUpApiRoute`                         | string   | API endpoint for user registration                                      |
+| `signInApiRoute`                         | string   | API endpoint for user login                                             |
+| `refreshTokenApiRoute`                   | string   | API endpoint for token refresh (receives refresh token in request body) |
+| `signInAfterSignUp`                      | boolean  | Whether to automatically sign in after registration                     |
+| `redirectClientRoutes`                   | object   | Routes for redirection after auth actions                               |
+| `signInResponseJsonAccessTokenLocation`  | string[] | Path to access token in API response                                    |
+| `signInResponseJsonRefreshTokenLocation` | string[] | Path to refresh token in API response                                   |
+| `signInResponseJsonUserLocation`         | string[] | Path to user data in API response (optional)                            |
 
 > **Note:**
 > If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to `signInApiRoute` after registration. Make sure both endpoints accept the same payload structure.
+
+## Backend API Requirements
+
+### Refresh Token Endpoint
+
+Your refresh token endpoint must accept the refresh token in the request body:
+
+```
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "your-refresh-token-here"
+}
+```
+
+The endpoint should return the same response format as your login endpoint, containing new access and refresh tokens.
 
 ## Security Considerations
 
@@ -247,6 +264,7 @@ The authentication context provides the following properties and methods via the
 - Always use HTTPS for API communications
 - Implement proper token expiration on the backend
 - Use proper CORS settings on your API
+- Refresh tokens are sent in request body
 
 ## License
 
