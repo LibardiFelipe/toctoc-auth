@@ -1,4 +1,4 @@
-import { utils } from "../libs";
+import { utils, withRetry, isRetryableError } from "../libs";
 import { type TocTocAuthConfig, type TocTocResult } from "../types";
 
 const { nameOf, hasNestedProperty } = utils;
@@ -18,13 +18,22 @@ const registerAsync = async <TResponse>(
     );
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
+  const response = await withRetry(
+    () =>
+      fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      }),
+    {
+      maxRetries: config.retryOptions?.maxRetries ?? 3,
+      baseDelay: config.retryOptions?.baseDelay ?? 1000,
+      maxDelay: config.retryOptions?.maxDelay ?? 5000,
+      retryCondition: isRetryableError,
+    }
+  );
 
   const body = (await response.json()) as TResponse;
   return {
@@ -56,13 +65,22 @@ const loginAsync = async <TResponse>(
     );
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
+  const response = await withRetry(
+    () =>
+      fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      }),
+    {
+      maxRetries: config.retryOptions?.maxRetries ?? 3,
+      baseDelay: config.retryOptions?.baseDelay ?? 1000,
+      maxDelay: config.retryOptions?.maxDelay ?? 5000,
+      retryCondition: isRetryableError,
+    }
+  );
 
   const body = (await response.json()) as TResponse;
   if (!response.ok) {
@@ -151,13 +169,22 @@ const refreshTokenAsync = async <TResponse>(
   }
 
   const refreshUrl = `${baseUrl}${path}`;
-  const response = await fetch(refreshUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+  const response = await withRetry(
+    () =>
+      fetch(refreshUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refreshToken }),
+      }),
+    {
+      maxRetries: config.retryOptions?.maxRetries ?? 3,
+      baseDelay: config.retryOptions?.baseDelay ?? 1000,
+      maxDelay: config.retryOptions?.maxDelay ?? 5000,
+      retryCondition: isRetryableError,
+    }
+  );
 
   const body = (await response.json()) as TResponse;
   if (!response.ok) {

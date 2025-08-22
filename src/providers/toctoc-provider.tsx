@@ -9,6 +9,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 export type TocTocAuthConfig = {
   apiBaseUrl: string;
   encryptionKey: string;
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelay?: number;
+    maxDelay?: number;
+  };
   providers: {
     credentials?: {
       refreshTokenApiRoute: string;
