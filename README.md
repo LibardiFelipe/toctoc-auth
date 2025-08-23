@@ -9,12 +9,14 @@ TocToc Auth is a lightweight, secure authentication library for React applicatio
 ## Features
 
 - JWT-based authentication with access and refresh tokens
-- Automatic token refresh
+- Automatic token refresh with retry logic and exponential backoff
 - Encrypted local storage for secure token storage
 - Axios interceptors for authenticated API requests
 - User authentication state management
 - Protected routes with redirection
+- Role-based component protection
 - Customizable authentication endpoints and response formats
+- Context-based configuration (SSR compatible)
 
 ## Installation
 
@@ -40,6 +42,11 @@ import { TocTocAuthProvider } from "toctoc-auth";
 export const authConfig = {
   apiBaseUrl: "https://api.example.com",
   encryptionKey: "your-strong-encryption-key",
+  retryOptions: {
+    maxRetries: 3,
+    baseDelay: 1000,
+    maxDelay: 5000,
+  },
   providers: {
     credentials: {
       signUpApiRoute: "/auth/register",
@@ -187,26 +194,49 @@ TocToc provides an Axios wrapper that automatically adds authentication headers 
 
 ```tsx
 import axios from "axios";
-import { withTocTocAxiosWrapper } from "toctoc-auth";
-import { authConfig } from "../App";
+import {
+  createTocTocAxiosWrapper,
+  useTocTocConfig,
+  useTocTocAuth,
+} from "toctoc-auth";
 
-const api = axios.create({
-  baseURL: "https://api.example.com",
-});
+const ApiService = () => {
+  const config = useTocTocConfig();
+  const { getUser } = useTocTocAuth();
 
-const authenticatedApi = withTocTocAxiosWrapper(authConfig, api);
+  const api = axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+  });
 
-const fetchData = async () => {
-  const response = await authenticatedApi.get("/protected-resource");
-  return response.data;
+  const getAuthContent = () => {
+    // Access current auth content from your app state
+    return localStorageService.getItem("toctoc-auth", config.encryptionKey);
+  };
+
+  const authenticatedApi = createTocTocAxiosWrapper(
+    config,
+    api,
+    getAuthContent
+  );
+
+  const fetchData = async () => {
+    const response = await authenticatedApi.get("/protected-resource");
+    return response.data;
+  };
+
+  return { fetchData };
 };
 ```
 
 - The wrapper will automatically attach the access token to requests and handle token refresh on 401 errors. If the refresh fails, the user will be signed out and redirected.
 
-## Authentication Context API
+## API Reference
 
-The authentication context provides the following properties and methods via the `useTocTocAuth` hook:
+### Hooks
+
+#### useTocTocAuth()
+
+The authentication context provides the following properties and methods:
 
 - `isAuthenticated: boolean` — Whether the user is currently authenticated.
 - `isAuthenticating: boolean` — Whether an authentication operation is in progress.
@@ -215,15 +245,47 @@ The authentication context provides the following properties and methods via the
 - `signOutAsync(): Promise<void>` — Sign out the current user.
 - `getUser<TUser>(): TUser | undefined` — Get the current user object (type-safe).
 
+#### useTocTocConfig()
+
+Access the current authentication configuration within components:
+
+```tsx
+import { useTocTocConfig } from "toctoc-auth";
+
+const MyComponent = () => {
+  const config = useTocTocConfig();
+  console.log(config.apiBaseUrl); // Access configuration
+};
+```
+
+### Functions
+
+#### createTocTocAxiosWrapper(config, api, getAuthContent)
+
+Creates an authenticated Axios instance with automatic token handling:
+
+- `config: TocTocAuthConfig` — Authentication configuration
+- `api: AxiosInstance` — Axios instance to wrap
+- `getAuthContent: () => TocTocAuthContent | null` — Function to get current auth state
+
 ## Configuration Options
 
-### TocTocAuthProviderConfig
+### TocTocAuthConfig
 
 | Property                | Type   | Description                                             |
 | ----------------------- | ------ | ------------------------------------------------------- |
 | `apiBaseUrl`            | string | Base URL for API requests                               |
 | `encryptionKey`         | string | Key used to encrypt authentication data in localStorage |
+| `retryOptions`          | object | Optional retry configuration for network requests       |
 | `providers.credentials` | object | Configuration for username/password authentication      |
+
+### Retry Options
+
+| Property     | Type   | Default | Description                      |
+| ------------ | ------ | ------- | -------------------------------- |
+| `maxRetries` | number | 3       | Maximum number of retry attempts |
+| `baseDelay`  | number | 1000    | Base delay in milliseconds       |
+| `maxDelay`   | number | 5000    | Maximum delay in milliseconds    |
 
 ### Credentials Provider Configuration
 
@@ -264,7 +326,9 @@ The endpoint should return the same response format as your login endpoint, cont
 - Always use HTTPS for API communications
 - Implement proper token expiration on the backend
 - Use proper CORS settings on your API
-- Refresh tokens are sent in request body
+- Refresh tokens are sent securely in request body
+- Configure retry options based on your network requirements
+- Use React context for SSR-compatible configuration management
 
 ## License
 

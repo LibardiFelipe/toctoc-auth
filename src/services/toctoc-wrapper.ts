@@ -1,20 +1,23 @@
 import { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
-import { globals } from "../configs";
 import { credentialsService, localStorageService } from ".";
 import { utils } from "../libs";
 import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
+import { TOCTOC_AUTH_CACHE_KEY } from "../providers/toctoc-provider";
 
-export const withTocTocAxiosWrapper = (
-  config: TocTocAuthConfig,
+export const createTocTocAxiosWrapper = (
+  tocTocConfig: TocTocAuthConfig,
   api: AxiosInstance
 ): AxiosInstance => {
   const signOutRedirectRoute =
-    config.providers.credentials?.redirectClientRoutes.afterSignOut;
-  const cacheKey = globals.cacheKey;
+    tocTocConfig.providers.credentials?.redirectClientRoutes.afterSignOut;
 
   api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      const authContent = globals.getAuthContent();
+      const authContent = localStorageService.getItem<TocTocAuthContent>(
+        TOCTOC_AUTH_CACHE_KEY,
+        tocTocConfig.encryptionKey
+      );
+
       if (authContent?.accessToken) {
         config.headers.Authorization = `Bearer ${authContent.accessToken}`;
       }
@@ -33,10 +36,14 @@ export const withTocTocAxiosWrapper = (
         originalRequest._retry = true;
 
         try {
-          const authContent = globals.getAuthContent();
+          const authContent = localStorageService.getItem<TocTocAuthContent>(
+            TOCTOC_AUTH_CACHE_KEY,
+            tocTocConfig.encryptionKey
+          );
+
           if (authContent?.refreshToken) {
             const response = await credentialsService.refreshTokenAsync(
-              config,
+              tocTocConfig,
               authContent.refreshToken
             );
 
@@ -45,13 +52,13 @@ export const withTocTocAxiosWrapper = (
               clearAndRedirect(signOutRedirectRoute);
             }
 
-            const accessTokenPath = config.providers.credentials
+            const accessTokenPath = tocTocConfig.providers.credentials
               ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
-            const refreshTokenPath = config.providers.credentials
+            const refreshTokenPath = tocTocConfig.providers.credentials
               ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
             const userPath =
-              config.providers.credentials?.signInJsonResponseUser?.location ??
-              [];
+              tocTocConfig.providers.credentials?.signInJsonResponseUser
+                ?.location ?? [];
 
             const newAccessToken = utils.getNestedProperty<string>(
               response.responseBody,
@@ -77,9 +84,9 @@ export const withTocTocAxiosWrapper = (
             }
 
             localStorageService.setItem(
-              cacheKey,
+              TOCTOC_AUTH_CACHE_KEY,
               updatedAuthContent,
-              config.encryptionKey
+              tocTocConfig.encryptionKey
             );
 
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -103,7 +110,7 @@ export const withTocTocAxiosWrapper = (
 };
 
 const clearAndRedirect = (redirectRoute?: string) => {
-  localStorageService.removeItem(globals.cacheKey);
+  localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
   if (redirectRoute) {
     window.location.replace(redirectRoute);
   }

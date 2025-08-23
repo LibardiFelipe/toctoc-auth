@@ -1,9 +1,8 @@
 import { type ReactNode, useState } from "react";
 import { type TocTocAuthContent, type TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
-import { globals } from "../configs";
 import { utils } from "../libs";
-import { TocTocAuthContext } from "../contexts";
+import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type TocTocAuthConfig = {
@@ -40,6 +39,8 @@ type TocTocAuthProviderProps = {
   children: ReactNode;
 };
 
+export const TOCTOC_AUTH_CACHE_KEY = "toctoc-auth";
+
 export const TocTocAuthProvider = ({
   config,
   children,
@@ -47,11 +48,10 @@ export const TocTocAuthProvider = ({
   const { credentials } = config.providers;
 
   const navigate = useNavigate();
-  globals.setGlobalConfig(config);
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authContent = localStorageService.getItem<TocTocAuthContent>(
-    globals.cacheKey,
+    TOCTOC_AUTH_CACHE_KEY,
     config.encryptionKey
   );
 
@@ -131,7 +131,7 @@ export const TocTocAuthProvider = ({
       };
 
       localStorageService.setItem(
-        globals.cacheKey,
+        TOCTOC_AUTH_CACHE_KEY,
         authContent,
         config.encryptionKey
       );
@@ -161,7 +161,7 @@ export const TocTocAuthProvider = ({
     setIsAuthenticating(true);
 
     try {
-      localStorageService.removeItem(globals.cacheKey);
+      localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
         navigate(credentials.redirectClientRoutes.afterSignOut, {
@@ -174,17 +174,19 @@ export const TocTocAuthProvider = ({
   };
 
   return (
-    <TocTocAuthContext.Provider
-      value={{
-        signUpWithCredentialsAsync,
-        signInWithCredentialsAsync,
-        isAuthenticating,
-        isAuthenticated: !!authContent?.accessToken,
-        signOutAsync,
-        getUser,
-      }}
-    >
-      {children}
-    </TocTocAuthContext.Provider>
+    <TocTocConfigContext.Provider value={config}>
+      <TocTocAuthContext.Provider
+        value={{
+          signUpWithCredentialsAsync,
+          signInWithCredentialsAsync,
+          isAuthenticating,
+          isAuthenticated: !!authContent?.accessToken,
+          signOutAsync,
+          getUser,
+        }}
+      >
+        {children}
+      </TocTocAuthContext.Provider>
+    </TocTocConfigContext.Provider>
   );
 };
