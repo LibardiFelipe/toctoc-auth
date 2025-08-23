@@ -3,20 +3,24 @@ import { credentialsService, localStorageService } from ".";
 import { utils } from "../libs";
 import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
 import { TOCTOC_AUTH_CACHE_KEY } from "../providers/toctoc-provider";
+import { RefreshTokenManager } from "./refresh-manager";
 
 export const createTocTocAxiosWrapper = (
   tocTocConfig: TocTocAuthConfig,
   api: AxiosInstance
 ): AxiosInstance => {
+  const refreshManager = new RefreshTokenManager();
   const signOutRedirectRoute =
     tocTocConfig.providers.credentials?.redirectClientRoutes.afterSignOut;
 
+  const getAuthContent = () => localStorageService.getItem<TocTocAuthContent>(
+    TOCTOC_AUTH_CACHE_KEY,
+    tocTocConfig.encryptionKey
+  );
+
   api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      const authContent = localStorageService.getItem<TocTocAuthContent>(
-        TOCTOC_AUTH_CACHE_KEY,
-        tocTocConfig.encryptionKey
-      );
+      const authContent = getAuthContent();
 
       if (authContent?.accessToken) {
         config.headers.Authorization = `Bearer ${authContent.accessToken}`;
@@ -36,20 +40,20 @@ export const createTocTocAxiosWrapper = (
         originalRequest._retry = true;
 
         try {
-          const authContent = localStorageService.getItem<TocTocAuthContent>(
-            TOCTOC_AUTH_CACHE_KEY,
-            tocTocConfig.encryptionKey
-          );
+          const authContent = getAuthContent();
 
           if (authContent?.refreshToken) {
-            const response = await credentialsService.refreshTokenAsync(
+            const response = await refreshManager.refresh(
               tocTocConfig,
-              authContent.refreshToken
+              authContent.refreshToken,
+              credentialsService.refreshTokenAsync
             );
 
             if (!response.isSuccess) {
               console.warn("Failed to refresh token. Clearing session.");
+              refreshManager.reset();
               clearAndRedirect(signOutRedirectRoute);
+              return Promise.reject(error);
             }
 
             const accessTokenPath = tocTocConfig.providers.credentials
@@ -94,10 +98,11 @@ export const createTocTocAxiosWrapper = (
             return api(originalRequest);
           }
 
-          console.warn("Failed to refresh token. Clearing session.");
+          console.warn("No refresh token available. Clearing session.");
           clearAndRedirect(signOutRedirectRoute);
         } catch (refreshError) {
           console.error("Error refreshing token:", refreshError);
+          refreshManager.reset();
           clearAndRedirect(signOutRedirectRoute);
         }
       }
