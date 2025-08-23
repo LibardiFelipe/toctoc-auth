@@ -1,14 +1,18 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useMemo, useCallback } from "react";
 import { type TocTocAuthContent, type TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
-import { globals } from "../configs";
 import { utils } from "../libs";
-import { TocTocAuthContext } from "../contexts";
+import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type TocTocAuthConfig = {
   apiBaseUrl: string;
   encryptionKey: string;
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelay?: number;
+    maxDelay?: number;
+  };
   providers: {
     credentials?: {
       refreshTokenApiRoute: string;
@@ -35,6 +39,8 @@ type TocTocAuthProviderProps = {
   children: ReactNode;
 };
 
+export const TOCTOC_AUTH_CACHE_KEY = "toctoc-auth";
+
 export const TocTocAuthProvider = ({
   config,
   children,
@@ -42,121 +48,126 @@ export const TocTocAuthProvider = ({
   const { credentials } = config.providers;
 
   const navigate = useNavigate();
-  globals.setGlobalConfig(config);
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authContent = localStorageService.getItem<TocTocAuthContent>(
-    globals.cacheKey,
+    TOCTOC_AUTH_CACHE_KEY,
     config.encryptionKey
   );
 
   const [searchParams] = useSearchParams();
 
-  const signUpWithCredentialsAsync = async <TApiResponse,>(
-    data: object
-  ): Promise<TocTocResult<TApiResponse>> => {
-    setIsAuthenticating(true);
-    try {
-      const response = await credentialsService.registerAsync<TApiResponse>(
-        config,
-        data
-      );
-
-      if (!response.isSuccess) {
-        return response;
-      }
-
-      if (credentials?.signInAfterSignUp) {
-        const signInResponse = await signInWithCredentialsAsync<TApiResponse>(
+  const signInWithCredentialsAsync = useCallback(
+    async <TApiResponse,>(
+      data: object
+    ): Promise<TocTocResult<TApiResponse>> => {
+      setIsAuthenticating(true);
+      try {
+        const response = await credentialsService.loginAsync<TApiResponse>(
+          config,
           data
         );
 
-        return signInResponse;
-      }
+        if (!response.isSuccess) {
+          return response;
+        }
 
-      const target = decodeURIComponent(
-        searchParams.get("redirect") ??
-          credentials?.redirectClientRoutes.afterSignUp ??
-          ""
-      );
+        const accessTokenPath = config.providers.credentials
+          ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
+        const refreshTokenPath = config.providers.credentials
+          ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
 
-      if (target) {
-        navigate(target, { replace: true });
-      }
+        const userPath =
+          config.providers.credentials?.signInJsonResponseUser?.location ?? [];
 
-      return response;
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
+        const authContent: TocTocAuthContent = {
+          provider: "credentials",
+          user: utils.getNestedProperty<object>(response.responseBody, userPath),
+          accessToken: utils.getNestedProperty<string>(
+            response.responseBody,
+            accessTokenPath
+          )!,
+          refreshToken: utils.getNestedProperty<string>(
+            response.responseBody,
+            refreshTokenPath
+          )!,
+        };
 
-  const signInWithCredentialsAsync = async <TApiResponse,>(
-    data: object
-  ): Promise<TocTocResult<TApiResponse>> => {
-    setIsAuthenticating(true);
-    try {
-      const response = await credentialsService.loginAsync<TApiResponse>(
-        config,
-        data
-      );
+        localStorageService.setItem(
+          TOCTOC_AUTH_CACHE_KEY,
+          authContent,
+          config.encryptionKey
+        );
 
-      if (!response.isSuccess) {
+        const target = decodeURIComponent(
+          searchParams.get("redirect") ??
+            credentials?.redirectClientRoutes.afterSignIn ??
+            ""
+        );
+
+        if (target) {
+          navigate(target, { replace: true });
+        }
+
         return response;
+      } finally {
+        setIsAuthenticating(false);
       }
+    },
+    [config, navigate, searchParams]
+  );
 
-      const accessTokenPath = config.providers.credentials
-        ?.signInJsonResponseAccessTokenLocation ?? ["accessToken"];
-      const refreshTokenPath = config.providers.credentials
-        ?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"];
+  const signUpWithCredentialsAsync = useCallback(
+    async <TApiResponse,>(
+      data: object
+    ): Promise<TocTocResult<TApiResponse>> => {
+      setIsAuthenticating(true);
+      try {
+        const response = await credentialsService.registerAsync<TApiResponse>(
+          config,
+          data
+        );
 
-      const userPath =
-        config.providers.credentials?.signInJsonResponseUser?.location ?? [];
+        if (!response.isSuccess) {
+          return response;
+        }
 
-      const authContent: TocTocAuthContent = {
-        provider: "credentials",
-        user: utils.getNestedProperty<object>(response.responseBody, userPath),
-        accessToken: utils.getNestedProperty<string>(
-          response.responseBody,
-          accessTokenPath
-        )!,
-        refreshToken: utils.getNestedProperty<string>(
-          response.responseBody,
-          refreshTokenPath
-        )!,
-      };
+        if (credentials?.signInAfterSignUp) {
+          const signInResponse = await signInWithCredentialsAsync<TApiResponse>(
+            data
+          );
 
-      localStorageService.setItem(
-        globals.cacheKey,
-        authContent,
-        config.encryptionKey
-      );
+          return signInResponse;
+        }
 
-      const target = decodeURIComponent(
-        searchParams.get("redirect") ??
-          credentials?.redirectClientRoutes.afterSignIn ??
-          ""
-      );
+        const target = decodeURIComponent(
+          searchParams.get("redirect") ??
+            credentials?.redirectClientRoutes.afterSignUp ??
+            ""
+        );
 
-      if (target) {
-        navigate(target, { replace: true });
+        if (target) {
+          navigate(target, { replace: true });
+        }
+
+        return response;
+      } finally {
+        setIsAuthenticating(false);
       }
+    },
+    [config, credentials, navigate, searchParams, signInWithCredentialsAsync]
+  );
 
-      return response;
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  const getUser = <TUser,>(): TUser | undefined => {
+  const getUser = useCallback(<TUser,>(): TUser | undefined => {
     const user = authContent?.user;
     return user as TUser | undefined;
-  };
+  }, [authContent]);
 
-  const signOutAsync = async () => {
+  const signOutAsync = useCallback(async () => {
     setIsAuthenticating(true);
 
     try {
-      localStorageService.removeItem(globals.cacheKey);
+      localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
         navigate(credentials.redirectClientRoutes.afterSignOut, {
@@ -166,20 +177,37 @@ export const TocTocAuthProvider = ({
     } finally {
       setIsAuthenticating(false);
     }
-  };
+  }, [credentials, navigate]);
+
+  const isAuthenticated = useMemo(
+    () => !!authContent?.accessToken,
+    [authContent?.accessToken]
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      signUpWithCredentialsAsync,
+      signInWithCredentialsAsync,
+      isAuthenticating,
+      isAuthenticated,
+      signOutAsync,
+      getUser,
+    }),
+    [
+      signUpWithCredentialsAsync,
+      signInWithCredentialsAsync,
+      isAuthenticating,
+      isAuthenticated,
+      signOutAsync,
+      getUser,
+    ]
+  );
 
   return (
-    <TocTocAuthContext.Provider
-      value={{
-        signUpWithCredentialsAsync,
-        signInWithCredentialsAsync,
-        isAuthenticating,
-        isAuthenticated: !!authContent?.accessToken,
-        signOutAsync,
-        getUser,
-      }}
-    >
-      {children}
-    </TocTocAuthContext.Provider>
+    <TocTocConfigContext.Provider value={config}>
+      <TocTocAuthContext.Provider value={contextValue}>
+        {children}
+      </TocTocAuthContext.Provider>
+    </TocTocConfigContext.Provider>
   );
 };

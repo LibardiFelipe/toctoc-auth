@@ -9,12 +9,16 @@ TocToc Auth is a lightweight, secure authentication library for React applicatio
 ## Features
 
 - JWT-based authentication with access and refresh tokens
-- Automatic token refresh
+- Automatic token refresh with retry logic and exponential backoff
+- Refresh token deduplication to prevent multiple simultaneous refresh requests
 - Encrypted local storage for secure token storage
 - Axios interceptors for authenticated API requests
 - User authentication state management
 - Protected routes with redirection
+- Role-based component protection
 - Customizable authentication endpoints and response formats
+- Context-based configuration (SSR compatible)
+- Built-in retry mechanism for network requests with configurable options
 
 ## Installation
 
@@ -40,11 +44,16 @@ import { TocTocAuthProvider } from "toctoc-auth";
 export const authConfig = {
   apiBaseUrl: "https://api.example.com",
   encryptionKey: "your-strong-encryption-key",
+  retryOptions: {
+    maxRetries: 3,
+    baseDelay: 1000,
+    maxDelay: 5000,
+  },
   providers: {
     credentials: {
       signUpApiRoute: "/auth/register",
       signInApiRoute: "/auth/login",
-      refreshTokenApiRoute: "/auth/refresh/",
+      refreshTokenApiRoute: "/auth/refresh",
       signInAfterSignUp: true,
       redirectClientRoutes: {
         afterSignUp: "/complete-profile",
@@ -186,27 +195,33 @@ const Profile = () => {
 TocToc provides an Axios wrapper that automatically adds authentication headers and handles token refresh:
 
 ```tsx
-import axios from "axios";
-import { withTocTocAxiosWrapper } from "toctoc-auth";
-import { authConfig } from "../App";
+import { createTocTocAxiosWrapper } from "toctoc-auth";
+import { authConfig } from "../../configs";
 
-const api = axios.create({
-  baseURL: "https://api.example.com",
-});
+export const api = createTocTocAxiosWrapper(
+  authConfig,
+  axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  })
+);
 
-const authenticatedApi = withTocTocAxiosWrapper(authConfig, api);
-
-const fetchData = async () => {
-  const response = await authenticatedApi.get("/protected-resource");
-  return response.data;
-};
+await api.get("/some-protected-route");
 ```
 
-- The wrapper will automatically attach the access token to requests and handle token refresh on 401 errors. If the refresh fails, the user will be signed out and redirected.
+- The wrapper will automatically attach the access token to requests and handle token refresh on 401 errors
+- Includes refresh token deduplication to prevent multiple simultaneous refresh attempts
+- If the refresh fails, the user will be signed out and redirected
 
-## Authentication Context API
+## API Reference
 
-The authentication context provides the following properties and methods via the `useTocTocAuth` hook:
+### Hooks
+
+#### useTocTocAuth()
+
+The authentication context provides the following properties and methods:
 
 - `isAuthenticated: boolean` — Whether the user is currently authenticated.
 - `isAuthenticating: boolean` — Whether an authentication operation is in progress.
@@ -215,31 +230,108 @@ The authentication context provides the following properties and methods via the
 - `signOutAsync(): Promise<void>` — Sign out the current user.
 - `getUser<TUser>(): TUser | undefined` — Get the current user object (type-safe).
 
+### Functions
+
+#### createTocTocAxiosWrapper(config, api)
+
+Creates an authenticated Axios instance with automatic token handling:
+
+- `config: TocTocAuthConfig` — Authentication configuration
+- `api: AxiosInstance` — Axios instance to wrap
+
+Features:
+
+- Automatically attaches access tokens to requests
+- Handles token refresh on 401 responses with deduplication
+- Implements retry logic with exponential backoff
+- Clears session and redirects on refresh failure
+
 ## Configuration Options
 
-### TocTocAuthProviderConfig
+### TocTocAuthConfig
 
 | Property                | Type   | Description                                             |
 | ----------------------- | ------ | ------------------------------------------------------- |
 | `apiBaseUrl`            | string | Base URL for API requests                               |
 | `encryptionKey`         | string | Key used to encrypt authentication data in localStorage |
+| `retryOptions`          | object | Optional retry configuration for network requests       |
 | `providers.credentials` | object | Configuration for username/password authentication      |
+
+### Retry Options
+
+| Property     | Type   | Default | Description                      |
+| ------------ | ------ | ------- | -------------------------------- |
+| `maxRetries` | number | 3       | Maximum number of retry attempts |
+| `baseDelay`  | number | 1000    | Base delay in milliseconds       |
+| `maxDelay`   | number | 5000    | Maximum delay in milliseconds    |
 
 ### Credentials Provider Configuration
 
-| Property                                 | Type     | Description                                         |
-| ---------------------------------------- | -------- | --------------------------------------------------- |
-| `signUpApiRoute`                         | string   | API endpoint for user registration                  |
-| `signInApiRoute`                         | string   | API endpoint for user login                         |
-| `refreshTokenApiRoute`                   | string   | API endpoint for token refresh                      |
-| `signInAfterSignUp`                      | boolean  | Whether to automatically sign in after registration |
-| `redirectClientRoutes`                   | object   | Routes for redirection after auth actions           |
-| `signInResponseJsonAccessTokenLocation`  | string[] | Path to access token in API response                |
-| `signInResponseJsonRefreshTokenLocation` | string[] | Path to refresh token in API response               |
-| `signInResponseJsonUserLocation`         | string[] | Path to user data in API response (optional)        |
+| Property                                 | Type     | Description                                                             |
+| ---------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| `signUpApiRoute`                         | string   | API endpoint for user registration                                      |
+| `signInApiRoute`                         | string   | API endpoint for user login                                             |
+| `refreshTokenApiRoute`                   | string   | API endpoint for token refresh (receives refresh token in request body) |
+| `signInAfterSignUp`                      | boolean  | Whether to automatically sign in after registration                     |
+| `redirectClientRoutes`                   | object   | Routes for redirection after auth actions                               |
+| `signInJsonResponseAccessTokenLocation`  | string[] | Path to access token in API response                                    |
+| `signInJsonResponseRefreshTokenLocation` | string[] | Path to refresh token in API response                                   |
+| `signInJsonResponseUser.location`        | string[] | Path to user data in API response (optional)                            |
+| `signInJsonResponseUser.roleLocation`    | string[] | Additional path for user role (appended to user location)               |
 
 > **Note:**
 > If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to `signInApiRoute` after registration. Make sure both endpoints accept the same payload structure.
+
+## Backend API Requirements
+
+### Refresh Token Endpoint
+
+Your refresh token endpoint must accept the refresh token in the request body:
+
+```
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "your-refresh-token-here"
+}
+```
+
+The endpoint should return the same response format as your login endpoint, containing new access and refresh tokens.
+
+## Advanced Features
+
+### Retry Mechanism
+
+TocToc Auth includes a built-in retry mechanism for network requests with the following features:
+
+- **Exponential backoff**: Delays increase exponentially between retry attempts
+- **Jitter**: Random variance added to prevent thundering herd problems
+- **Configurable options**: Customize max retries, base delay, and max delay
+- **Smart retry conditions**: Only retries on network errors and specific HTTP status codes (408, 429, 500, 502, 503, 504)
+
+Example retry configuration:
+
+```tsx
+const authConfig = {
+  // ... other config
+  retryOptions: {
+    maxRetries: 5,
+    baseDelay: 2000,
+    maxDelay: 10000,
+  },
+};
+```
+
+### Refresh Token Deduplication
+
+The library includes a `RefreshTokenManager` that prevents multiple simultaneous refresh token requests:
+
+- **Single refresh request**: Multiple expired requests share one refresh operation
+- **State management**: Tracks refresh status to avoid duplicate calls
+- **Automatic cleanup**: Resets state after successful or failed refresh attempts
+
+This feature is automatically enabled and requires no additional configuration.
 
 ## Security Considerations
 
@@ -247,6 +339,9 @@ The authentication context provides the following properties and methods via the
 - Always use HTTPS for API communications
 - Implement proper token expiration on the backend
 - Use proper CORS settings on your API
+- Refresh tokens are sent securely in request body
+- Configure retry options based on your network requirements
+- Use React context for SSR-compatible configuration management
 
 ## License
 

@@ -1,6 +1,5 @@
 import React, { JSX } from "react";
-import { globals } from "../configs";
-import { useTocTocAuth } from "../hooks";
+import { useTocTocAuth, useTocTocConfig } from "../hooks";
 import { utils } from "../libs";
 
 interface TocTocGuardProps<TRole> {
@@ -19,7 +18,7 @@ export const TocTocGuard = <TRole,>({
   allowedRoles,
 }: TocTocGuardProps<TRole>): JSX.Element => {
   const { getUser } = useTocTocAuth();
-  const configs = globals.getGlobalConfig();
+  const configs = useTocTocConfig();
 
   const userLocation =
     configs.providers.credentials?.signInJsonResponseUser?.location;

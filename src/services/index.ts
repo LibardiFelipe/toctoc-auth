@@ -1,4 +1,5 @@
 export { credentialsService } from "./credentials-service";
 export { localStorageService } from "./localStorage-service";
 export { cryptoService } from "./crypto-service";
-export { withTocTocAxiosWrapper } from "./toctoc-wrapper";
+export { createTocTocAxiosWrapper } from "./toctoc-wrapper";
+export { RefreshTokenManager } from "./refresh-manager";
