@@ -1,7 +1,7 @@
 import { type ReactNode, useState, useMemo, useCallback } from "react";
 import { type TocTocAuthContent, type TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
-import { utils } from "../libs";
+import { utils, validateRedirectUrl } from "../libs";
 import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -99,15 +99,12 @@ export const TocTocAuthProvider = ({
           config.encryptionKey
         );
 
-        const target = decodeURIComponent(
-          searchParams.get("redirect") ??
-            credentials?.redirectClientRoutes.afterSignIn ??
-            ""
+        const target = validateRedirectUrl(
+          searchParams.get("redirect"),
+          credentials?.redirectClientRoutes.afterSignIn ?? "/"
         );
 
-        if (target) {
-          navigate(target, { replace: true });
-        }
+        navigate(target, { replace: true });
 
         return response;
       } finally {
@@ -140,15 +137,12 @@ export const TocTocAuthProvider = ({
           return signInResponse;
         }
 
-        const target = decodeURIComponent(
-          searchParams.get("redirect") ??
-            credentials?.redirectClientRoutes.afterSignUp ??
-            ""
+        const target = validateRedirectUrl(
+          searchParams.get("redirect"),
+          credentials?.redirectClientRoutes.afterSignUp ?? "/"
         );
 
-        if (target) {
-          navigate(target, { replace: true });
-        }
+        navigate(target, { replace: true });
 
         return response;
       } finally {
