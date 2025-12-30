@@ -1,6 +1,6 @@
 import React, { JSX } from "react";
 import { useTocTocAuth, useTocTocConfig } from "../hooks";
-import { utils } from "../libs";
+import { utils, createConfigError } from "../libs";
 
 interface TocTocGuardProps<TRole> {
   blurRadius?: number;
@@ -23,12 +23,13 @@ export const TocTocGuard = <TRole,>({
   const userLocation =
     configs.providers.credentials?.signInJsonResponseUser?.location;
   if (!userLocation || userLocation.length === 0) {
-    throw new Error(
+    throw createConfigError(
       `${utils.nameOf(
         () => configs.providers.credentials?.signInJsonResponseUser
       )}.${utils.nameOf(
         () => configs.providers.credentials?.signInJsonResponseUser?.location
-      )} is not defined.`
+      )} is not defined.`,
+      "Role-based access configuration error. Please contact support."
     );
   }
 
@@ -40,13 +41,14 @@ export const TocTocGuard = <TRole,>({
     roleLocation.length === 0 ||
     utils.areStringArraysEquivalent(roleLocation, userLocation)
   ) {
-    throw new Error(
+    throw createConfigError(
       `${utils.nameOf(
         () => configs.providers.credentials?.signInJsonResponseUser
       )}.${utils.nameOf(
         () =>
           configs.providers.credentials?.signInJsonResponseUser?.roleLocation
-      )} is not properly defined.`
+      )} is not properly defined.`,
+      "Role-based access configuration error. Please contact support."
     );
   }
 

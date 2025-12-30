@@ -10,7 +10,7 @@ This document details security vulnerabilities identified in the TocToc Auth lib
 |----------|-------|-------------|
 | CRITICAL | 2 | Weak Cryptography, Open Redirect |
 | HIGH | 2 | Token Storage via XSS, Missing Decryption Validation |
-| MEDIUM | 5 | Missing CSRF, Race Conditions, Information Disclosure, Input Validation, Prototype Pollution |
+| MEDIUM | 5 | Race Conditions, Information Disclosure, Input Validation, Prototype Pollution |
 | LOW | 4 | Timing Attacks, Client-Side Role Enforcement, Console Logging, Key Rotation |
 
 ---
@@ -377,71 +377,6 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
 ---
 
 ## MEDIUM Vulnerabilities
-
-### 5. Missing CSRF Protection
-
-**File:** `src/services/credentials-service.ts` (lines 23-29, 70-76, 174-180)
-
-**Current Code:**
-```typescript
-fetch(`${baseUrl}${path}`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(data),
-})
-```
-
-**Vulnerability:** No CSRF token is included in requests. While modern browsers have SameSite cookie protections, applications using this library may be vulnerable to CSRF attacks.
-
-**Proposed Fix:**
-
-Add CSRF token support to configuration and requests:
-
-```typescript
-// In TocTocAuthConfig type (toctoc-provider.tsx)
-export type TocTocAuthConfig = {
-  // ... existing fields
-  csrf?: {
-    enabled: boolean;
-    headerName?: string;    // Default: "X-CSRF-Token"
-    cookieName?: string;    // Default: "csrf-token"
-    tokenEndpoint?: string; // Optional endpoint to fetch CSRF token
-  };
-};
-
-// In credentials-service.ts
-const getCsrfToken = (config: TocTocAuthConfig): string | null => {
-  if (!config.csrf?.enabled) return null;
-
-  const cookieName = config.csrf.cookieName ?? "csrf-token";
-  const match = document.cookie.match(new RegExp(`(^| )${cookieName}=([^;]+)`));
-  return match ? match[2] : null;
-};
-
-const buildHeaders = (config: TocTocAuthConfig): HeadersInit => {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-
-  const csrfToken = getCsrfToken(config);
-  if (csrfToken) {
-    const headerName = config.csrf?.headerName ?? "X-CSRF-Token";
-    headers[headerName] = csrfToken;
-  }
-
-  return headers;
-};
-
-// Update fetch calls:
-fetch(`${baseUrl}${path}`, {
-  method: "POST",
-  headers: buildHeaders(config),
-  credentials: "same-origin", // Include cookies
-  body: JSON.stringify(data),
-})
-```
 
 ---
 

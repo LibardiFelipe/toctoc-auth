@@ -1,15 +1,8 @@
 import { type TocTocAuthConfig, type TocTocResult } from "../types";
 
-interface RefreshState {
-  promise: Promise<TocTocResult<any>> | null;
-  isRefreshing: boolean;
-}
-
 export class RefreshTokenManager {
-  private refreshState: RefreshState = {
-    promise: null,
-    isRefreshing: false,
-  };
+  private pendingRefresh: Promise<TocTocResult<unknown>> | null = null;
+  private isRefreshing = false;
 
   async refresh<TResponse>(
     config: TocTocAuthConfig,
@@ -19,43 +12,37 @@ export class RefreshTokenManager {
       token: string
     ) => Promise<TocTocResult<TResponse>>
   ): Promise<TocTocResult<TResponse>> {
-    if (this.refreshState.isRefreshing && this.refreshState.promise) {
-      return this.refreshState.promise as Promise<TocTocResult<TResponse>>;
+    // If there's already a pending refresh, return it
+    // This prevents race conditions by checking the promise immediately
+    if (this.pendingRefresh) {
+      return this.pendingRefresh as Promise<TocTocResult<TResponse>>;
     }
 
-    this.refreshState.isRefreshing = true;
-    this.refreshState.promise = this.performRefresh(
-      config,
-      refreshToken,
-      refreshFn
-    );
+    // Create the refresh promise immediately to prevent race conditions
+    // Any concurrent calls will see pendingRefresh as non-null
+    this.pendingRefresh = (async (): Promise<TocTocResult<TResponse>> => {
+      this.isRefreshing = true;
+      try {
+        return await refreshFn(config, refreshToken);
+      } finally {
+        this.isRefreshing = false;
+        // Small delay before clearing to handle near-simultaneous requests
+        // that might check pendingRefresh right after it's set to null
+        setTimeout(() => {
+          this.pendingRefresh = null;
+        }, 100);
+      }
+    })();
 
-    try {
-      const result = await this.refreshState.promise;
-      return result as TocTocResult<TResponse>;
-    } finally {
-      this.refreshState.isRefreshing = false;
-      this.refreshState.promise = null;
-    }
-  }
-
-  private async performRefresh<TResponse>(
-    config: TocTocAuthConfig,
-    refreshToken: string,
-    refreshFn: (
-      config: TocTocAuthConfig,
-      token: string
-    ) => Promise<TocTocResult<TResponse>>
-  ): Promise<TocTocResult<TResponse>> {
-    return refreshFn(config, refreshToken);
+    return this.pendingRefresh as Promise<TocTocResult<TResponse>>;
   }
 
   isCurrentlyRefreshing(): boolean {
-    return this.refreshState.isRefreshing;
+    return this.isRefreshing;
   }
 
   reset(): void {
-    this.refreshState.isRefreshing = false;
-    this.refreshState.promise = null;
+    this.isRefreshing = false;
+    this.pendingRefresh = null;
   }
 }
