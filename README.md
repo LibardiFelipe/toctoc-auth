@@ -11,11 +11,16 @@ TocToc Auth is a lightweight, secure authentication library for React applicatio
 - JWT-based authentication with access and refresh tokens
 - Automatic token refresh with retry logic and exponential backoff
 - Refresh token deduplication to prevent multiple simultaneous refresh requests
-- Encrypted local storage for secure token storage
+- Encrypted local storage with AES-256-CBC, PBKDF2 key derivation, and HMAC integrity verification
+- Browser fingerprinting to detect token theft
+- Client-side JWT expiration checking via `isTokenExpired` utility
+- Open redirect protection on all auth redirects
+- Input sanitization with prototype pollution prevention
+- Environment-aware logging (suppressed in production)
 - Axios interceptors for authenticated API requests
 - User authentication state management
 - Protected routes with redirection
-- Role-based component protection
+- Role-based component protection with optional content hiding
 - Customizable authentication endpoints and response formats
 - Context-based configuration (SSR compatible)
 - Built-in retry mechanism for network requests with configurable options
@@ -168,9 +173,12 @@ const App = () => {
 
 - `allowedRoles`: An array of allowed roles.
 - `lockIcon`: A component that will be used as a protection icon if user role is not allowed.
+- `hideContent`: When `true`, protected content is not rendered in the DOM at all (default: `false`, which blurs the content).
+- `blurRadius`: Blur intensity in pixels when `hideContent` is `false` (default: `3`).
+- `style`: Custom styles for the wrapper element.
 
 > **Important:**
-> This is a client-side protection mechanism, so you should also implement server-side authorization to ensure specific permissions.
+> This is a **UX feature, not a security control**. Always enforce authorization server-side. This component only hides UI elements and should not protect sensitive data.
 
 ### 5. Access User Information
 
@@ -245,6 +253,21 @@ Features:
 - Handles token refresh on 401 responses with deduplication
 - Implements retry logic with exponential backoff
 - Clears session and redirects on refresh failure
+
+#### isTokenExpired(token)
+
+Checks if a JWT token has expired by decoding its payload and comparing the `exp` claim to the current time:
+
+- `token: string` — The JWT token to check
+- Returns `true` if the token is expired or invalid, `false` otherwise
+
+```tsx
+import { isTokenExpired } from "toctoc-auth";
+
+if (isTokenExpired(myToken)) {
+  // Token is expired, handle accordingly
+}
+```
 
 ## Configuration Options
 
@@ -333,15 +356,37 @@ The library includes a `RefreshTokenManager` that prevents multiple simultaneous
 
 This feature is automatically enabled and requires no additional configuration.
 
-## Security Considerations
+## Security
 
-- Use a strong `encryptionKey` to protect stored tokens
+### Built-in Protections
+
+- **AES-256-CBC encryption** with PBKDF2 key derivation (100,000 iterations) and HMAC integrity verification for localStorage data
+- **Browser fingerprinting** to detect token theft across different environments
+- **Open redirect prevention** on all authentication redirects (blocks `javascript:`, `data:`, protocol-relative URLs, and external origins)
+- **Input sanitization** with prototype pollution prevention (`__proto__`, `constructor`, `prototype` keys are blocked)
+- **Environment-aware logging** — console output is suppressed in production to prevent information leakage
+- **Race condition prevention** in token refresh via promise deduplication
+
+### Recommended Server-Side Headers
+
+For applications using this library, configure the following HTTP security headers:
+
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Content-Security-Policy: default-src 'self'
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+### Best Practices
+
+- Use a strong, unique `encryptionKey` — this is the passphrase for PBKDF2 key derivation
 - Always use HTTPS for API communications
-- Implement proper token expiration on the backend
+- Implement proper token expiration and rate limiting on the backend
 - Use proper CORS settings on your API
-- Refresh tokens are sent securely in request body
-- Configure retry options based on your network requirements
-- Use React context for SSR-compatible configuration management
+- `TocTocGuard` is a UX feature — always enforce authorization server-side
+- `TocTocRedirect` is a client-side redirect — always validate authentication server-side
 
 ## License
 

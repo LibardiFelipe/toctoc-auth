@@ -162,6 +162,7 @@ export const TocTocAuthProvider = ({
 
     try {
       localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
+      sessionStorage.removeItem(TOCTOC_AUTH_CACHE_KEY);
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
         navigate(credentials.redirectClientRoutes.afterSignOut, {

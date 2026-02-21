@@ -1,6 +1,6 @@
 import { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 import { credentialsService, localStorageService } from ".";
-import { utils } from "../libs";
+import { utils, logger } from "../libs";
 import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
 import { TOCTOC_AUTH_CACHE_KEY } from "../providers/toctoc-provider";
 import { RefreshTokenManager } from "./refresh-manager";
@@ -50,7 +50,7 @@ export const createTocTocAxiosWrapper = (
             );
 
             if (!response.isSuccess) {
-              console.warn("Failed to refresh token. Clearing session.");
+              logger.warn("Failed to refresh token. Clearing session.");
               refreshManager.reset();
               clearAndRedirect(signOutRedirectRoute);
               return Promise.reject(error);
@@ -98,10 +98,10 @@ export const createTocTocAxiosWrapper = (
             return api(originalRequest);
           }
 
-          console.warn("No refresh token available. Clearing session.");
+          logger.warn("No refresh token available. Clearing session.");
           clearAndRedirect(signOutRedirectRoute);
         } catch (refreshError) {
-          console.error("Error refreshing token:", refreshError);
+          logger.error("Error refreshing token:", refreshError);
           refreshManager.reset();
           clearAndRedirect(signOutRedirectRoute);
         }
