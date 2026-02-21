@@ -1,6 +1,7 @@
 import React, { type JSX, useEffect } from "react";
 import { useTocTocAuth } from "../hooks";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { validateRedirectUrl } from "../libs";
 
 type TocTocProps = {
   reverse?: boolean;
@@ -51,7 +52,7 @@ export const TocTocRedirect = ({
         return;
       }
 
-      const target = decodeURIComponent(redirectSearchParam ?? to);
+      const target = validateRedirectUrl(redirectSearchParam, to);
       navigate(target, { replace: true });
     }
   }, [shouldRedirectReverse, searchParams, currentPath, navigate]);

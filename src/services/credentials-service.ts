@@ -1,4 +1,10 @@
-import { utils, withRetry, isRetryableError } from "../libs";
+import {
+  utils,
+  withRetry,
+  isRetryableError,
+  sanitizeInput,
+  createConfigError,
+} from "../libs";
 import { type TocTocAuthConfig, type TocTocResult } from "../types";
 
 const { nameOf, hasNestedProperty } = utils;
@@ -11,12 +17,16 @@ const registerAsync = async <TResponse>(
   const path = config.providers.credentials?.signUpApiRoute;
 
   if (!path) {
-    throw new Error(
+    throw createConfigError(
       `Please set the '${nameOf(
         () => config.providers.credentials?.signUpApiRoute
-      )}' in the credentials provider configuration.`
+      )}' in the credentials provider configuration.`,
+      "Authentication configuration error. Please contact support."
     );
   }
+
+  // Sanitize input to prevent prototype pollution
+  const sanitizedData = sanitizeInput(data);
 
   const response = await withRetry(
     () =>
@@ -25,7 +35,7 @@ const registerAsync = async <TResponse>(
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(sanitizedData),
       }),
     {
       maxRetries: config.retryOptions?.maxRetries ?? 3,
@@ -58,12 +68,16 @@ const loginAsync = async <TResponse>(
     config.providers.credentials?.signInJsonResponseUser?.roleLocation;
 
   if (!path) {
-    throw new Error(
+    throw createConfigError(
       `Please set the '${nameOf(
         () => config.providers.credentials?.signInApiRoute
-      )}' in the credentials provider configuration.`
+      )}' in the credentials provider configuration.`,
+      "Authentication configuration error. Please contact support."
     );
   }
+
+  // Sanitize input to prevent prototype pollution
+  const sanitizedData = sanitizeInput(data);
 
   const response = await withRetry(
     () =>
@@ -72,7 +86,7 @@ const loginAsync = async <TResponse>(
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(sanitizedData),
       }),
     {
       maxRetries: config.retryOptions?.maxRetries ?? 3,
@@ -91,52 +105,57 @@ const loginAsync = async <TResponse>(
   }
 
   if (!body || Object.keys(body).length === 0) {
-    throw new Error(
+    throw createConfigError(
       `The response body from the '${nameOf(
         () => config.providers.credentials?.signInApiRoute
-      )}' endpoint is empty. Please check the API implementation.`
+      )}' endpoint is empty. Please check the API implementation.`,
+      "Authentication failed. Please try again."
     );
   }
 
   if (!hasNestedProperty(body, accessTokenPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.signInApiRoute
       )}' endpoint does not contain the expected '${accessTokenPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Authentication failed. Please try again."
     );
   }
 
   if (!hasNestedProperty(body, refreshTokenPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.signInApiRoute
       )}' endpoint does not contain the expected '${refreshTokenPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Authentication failed. Please try again."
     );
   }
 
   if (userPath && !hasNestedProperty(body, userPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.signInApiRoute
       )}' endpoint does not contain the expected '${userPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Authentication failed. Please try again."
     );
   }
 
   if (rolePath) {
     const roleLocation = userPath?.concat(rolePath) ?? [];
     if (!hasNestedProperty(body, roleLocation)) {
-      throw new Error(
+      throw createConfigError(
         `The response body from '${nameOf(
           () => config.providers.credentials?.signInApiRoute
         )}' endpoint does not contain the expected '${roleLocation.join(
           "."
-        )}' property. Please check the API implementation.`
+        )}' property. Please check the API implementation.`,
+        "Authentication failed. Please try again."
       );
     }
   }
@@ -161,10 +180,11 @@ const refreshTokenAsync = async <TResponse>(
     config.providers.credentials?.signInJsonResponseUser?.location;
 
   if (!path) {
-    throw new Error(
+    throw createConfigError(
       `Please set the '${nameOf(
         () => config.providers.credentials?.refreshTokenApiRoute
-      )}' in the credentials provider configuration.`
+      )}' in the credentials provider configuration.`,
+      "Authentication configuration error. Please contact support."
     );
   }
 
@@ -195,40 +215,44 @@ const refreshTokenAsync = async <TResponse>(
   }
 
   if (!body || Object.keys(body).length === 0) {
-    throw new Error(
+    throw createConfigError(
       `The response body from the '${nameOf(
         () => config.providers.credentials?.refreshTokenApiRoute
-      )}' endpoint is empty. Please check the API implementation.`
+      )}' endpoint is empty. Please check the API implementation.`,
+      "Token refresh failed. Please sign in again."
     );
   }
 
   if (!hasNestedProperty(body, accessTokenPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.refreshTokenApiRoute
       )}' endpoint does not contain the expected '${accessTokenPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Token refresh failed. Please sign in again."
     );
   }
 
   if (!hasNestedProperty(body, refreshTokenPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.refreshTokenApiRoute
       )}' endpoint does not contain the expected '${refreshTokenPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Token refresh failed. Please sign in again."
     );
   }
 
   if (userPath && !hasNestedProperty(body, userPath)) {
-    throw new Error(
+    throw createConfigError(
       `The response body from '${nameOf(
         () => config.providers.credentials?.refreshTokenApiRoute
       )}' endpoint does not contain the expected '${userPath.join(
         "."
-      )}' property. Please check the API implementation.`
+      )}' property. Please check the API implementation.`,
+      "Token refresh failed. Please sign in again."
     );
   }
 
