@@ -49,16 +49,40 @@ const generateFingerprint = (): string => {
   }
 };
 
+type DecryptCacheEntry = {
+  ciphertext: string;
+  encryptKey: string;
+  value: unknown;
+};
+const decryptCache = new Map<string, DecryptCacheEntry>();
+
+const cacheLookupKey = (cacheKey: string, encryptKey: string): string =>
+  `${cacheKey}${encryptKey}`;
+
 /**
  * Retrieves and decrypts an item from localStorage.
  * Validates fingerprint to detect potential token theft.
  *
+ * Decrypted values are memoized in module memory keyed by the raw ciphertext,
+ * so repeated reads of an unchanged value skip PBKDF2 + AES-CBC.
+ *
  * @returns The decrypted item or null if not found, corrupted, or fingerprint mismatch
  */
 const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
+  const lookup = cacheLookupKey(cacheKey, encryptKey);
   const item = localStorage.getItem(cacheKey);
   if (item === null) {
+    decryptCache.delete(lookup);
     return null;
+  }
+
+  const cached = decryptCache.get(lookup);
+  if (
+    cached !== undefined &&
+    cached.ciphertext === item &&
+    cached.encryptKey === encryptKey
+  ) {
+    return cached.value as T | null;
   }
 
   try {
@@ -66,6 +90,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
 
     if (!decryptedItem || decryptedItem.trim() === "") {
       localStorage.removeItem(cacheKey);
+      decryptCache.delete(lookup);
       return null;
     }
 
@@ -79,18 +104,22 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
       if (storedFingerprint !== currentFingerprint) {
         // Fingerprint mismatch - possible token theft or browser change
         localStorage.removeItem(cacheKey);
+        decryptCache.delete(lookup);
         return null;
       }
 
       // Remove fingerprint from returned data
       const { [FINGERPRINT_KEY]: _, ...data } = parsed;
+      decryptCache.set(lookup, { ciphertext: item, encryptKey, value: data });
       return data as T;
     }
 
+    decryptCache.set(lookup, { ciphertext: item, encryptKey, value: parsed });
     return parsed as T;
   } catch {
     // Decryption or parsing failed - remove corrupted data
     localStorage.removeItem(cacheKey);
+    decryptCache.delete(lookup);
     return null;
   }
 };
@@ -108,6 +137,12 @@ const setItem = <T>(cacheKey: string, value: T, encryptKey: string): void => {
   const item = JSON.stringify(valueWithFingerprint);
   const encryptedItem = cryptoService.encrypt(item, encryptKey);
   localStorage.setItem(cacheKey, encryptedItem);
+
+  decryptCache.set(cacheLookupKey(cacheKey, encryptKey), {
+    ciphertext: encryptedItem,
+    encryptKey,
+    value: value as unknown,
+  });
 };
 
 /**
@@ -115,6 +150,12 @@ const setItem = <T>(cacheKey: string, value: T, encryptKey: string): void => {
  */
 const removeItem = (key: string): void => {
   localStorage.removeItem(key);
+  const prefix = `${key}`;
+  for (const lookup of decryptCache.keys()) {
+    if (lookup.startsWith(prefix)) {
+      decryptCache.delete(lookup);
+    }
+  }
 };
 
 export const localStorageService = {
