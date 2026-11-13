@@ -20,42 +20,29 @@ export const TocTocRedirect = ({
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const currentPath = location.pathname;
-
   const shouldRedirectNormal = !isHydrating && !isAuthenticated && !reverse;
   const shouldRedirectReverse = !isHydrating && isAuthenticated && reverse;
 
   useEffect(() => {
     if (shouldRedirectNormal) {
-      const currentSearchParams = searchParams.toString().trim();
-      const hasSearchParams = currentSearchParams.length > 2;
-
-      const target =
-        to +
-        "?" +
-        "redirect=" +
-        encodeURIComponent(
-          `${currentPath}${hasSearchParams ? `?${currentSearchParams}` : ""}`
-        );
+      const hashIndex = to.indexOf("#");
+      const hash = hashIndex < 0 ? "" : to.slice(hashIndex);
+      const beforeHash = hashIndex < 0 ? to : to.slice(0, hashIndex);
+      const queryIndex = beforeHash.indexOf("?");
+      const path = queryIndex < 0 ? beforeHash : beforeHash.slice(0, queryIndex);
+      const params = new URLSearchParams(queryIndex < 0 ? "" : beforeHash.slice(queryIndex + 1));
+      params.set("redirect", location.pathname + location.search + location.hash);
+      const target = `${path}?${params.toString()}${hash}`;
       navigate(target, { replace: true });
     }
-  }, [shouldRedirectNormal, searchParams, currentPath, navigate]);
+  }, [shouldRedirectNormal, location.pathname, location.search, location.hash, to, navigate]);
 
   useEffect(() => {
     if (shouldRedirectReverse) {
-      const redirectSearchParam =
-        searchParams.get("redirect")?.toString()?.trim() ?? "";
-      const hasRedirectParam = redirectSearchParam.length > 2;
-
-      if (!hasRedirectParam) {
-        navigate(to, { replace: true });
-        return;
-      }
-
-      const target = validateRedirectUrl(redirectSearchParam, to);
+      const target = validateRedirectUrl(searchParams.get("redirect"), to);
       navigate(target, { replace: true });
     }
-  }, [shouldRedirectReverse, searchParams, currentPath, navigate]);
+  }, [shouldRedirectReverse, searchParams, to, navigate]);
 
   if (isHydrating || shouldRedirectNormal || shouldRedirectReverse) {
     return null;

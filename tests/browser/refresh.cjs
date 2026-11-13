@@ -200,3 +200,47 @@ test("hydration restores a stored session without mismatch or premature redirect
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test("redirects preserve query values, short paths, and fragments", async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/fixture.js") {
+      res.setHeader("Content-Type", "application/javascript");
+      res.end(fs.readFileSync("dist/tests/browser-fixture.js"));
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.end('<script src="/fixture.js"></script>');
+    }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH || undefined });
+    const context = await browser.newContext();
+    const url = `http://127.0.0.1:${server.address().port}`;
+    for (const original of ["/private?x#section", "/private?value=a%26b%3Dc&plus=%2B&percent=%25#part%20one"]) {
+      const page = await context.newPage();
+      await page.goto(url);
+      await page.evaluate(value => fixture.mountRedirect(value, "/login?theme=dark&redirect=stale#login", false, false), original);
+      await page.waitForFunction(() => JSON.parse(document.querySelector("#redirect-status")?.textContent || "{}").pathname === "/login");
+      const status = await page.locator("#redirect-status").textContent();
+      const target = JSON.parse(status);
+      const params = new URLSearchParams(target.search);
+      assert.equal(params.get("theme"), "dark");
+      assert.deepEqual(params.getAll("redirect"), [original]);
+      assert.equal(target.hash, "#login");
+      await page.close();
+    }
+    for (const destination of ["/", "/a", "/files/a%2Fb?value=a%26b%3Dc&plus=%2B#section"]) {
+      const page = await context.newPage();
+      await page.goto(url);
+      await page.evaluate(value => fixture.mountRedirect(`/login?redirect=${encodeURIComponent(value)}`, "/fallback", true, true), destination);
+      await page.waitForFunction(() => JSON.parse(document.querySelector("#redirect-status")?.textContent || "{}").pathname !== "/login");
+      const result = JSON.parse(await page.locator("#redirect-status").textContent());
+      assert.equal(result.pathname + result.search + result.hash, destination);
+      await page.close();
+    }
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

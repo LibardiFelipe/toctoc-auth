@@ -35,31 +35,20 @@ export const validateRedirectUrl = (
     }
   }
 
-  // Block protocol-relative URLs (//evil.com)
-  if (trimmedUrl.startsWith("//")) {
-    return fallback;
-  }
+  // URL parsers can discard ASCII controls, changing the meaning of the URL.
+  if (/[\u0000-\u001f\u007f]/.test(trimmedUrl)) return fallback;
 
   // Allow relative paths starting with /
   if (trimmedUrl.startsWith("/")) {
     try {
-      // Decode and re-check for protocol injection via encoding
-      const decoded = decodeURIComponent(trimmedUrl);
-      const decodedLower = decoded.toLowerCase().replace(/\s/g, "");
-
-      // Re-check after decoding
-      for (const protocol of dangerousProtocols) {
-        if (decodedLower.startsWith(protocol)) {
-          return fallback;
-        }
-      }
-
-      // Block protocol-relative after decoding
-      if (decoded.startsWith("//")) {
-        return fallback;
-      }
-
-      return decoded;
+      // Inspect only the path; decoding the returned query would change its values.
+      const path = trimmedUrl.split(/[?#]/, 1)[0];
+      const decodedPath = decodeURIComponent(path);
+      if (decodedPath.startsWith("//") || decodedPath.startsWith("/\\") ||
+          path.includes("\\") || /[\u0000-\u001f\u007f]/.test(decodedPath)) return fallback;
+      // Browsers treat backslashes as slashes for HTTP(S) URLs.
+      if (new URL(trimmedUrl, "https://toctoc.invalid").origin !== "https://toctoc.invalid") return fallback;
+      return trimmedUrl;
     } catch {
       // Invalid encoding, use fallback
       return fallback;
@@ -72,7 +61,7 @@ export const validateRedirectUrl = (
 
     // Only allow same-origin redirects
     if (targetUrl.origin === window.location.origin) {
-      return targetUrl.pathname + targetUrl.search + targetUrl.hash;
+      return validateRedirectUrl(targetUrl.pathname + targetUrl.search + targetUrl.hash, fallback);
     }
   } catch {
     // Invalid URL format

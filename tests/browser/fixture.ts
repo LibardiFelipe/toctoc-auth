@@ -8,6 +8,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { TocTocAuthProvider } from "../../src/providers/toctoc-provider";
 import { useTocTocAuth } from "../../src/hooks";
 import { TocTocRedirect } from "../../src/components/toctoc-redirect";
+import { TocTocAuthContext } from "../../src/contexts";
 
 const config = { apiBaseUrl: location.origin, encryptionKey: "test", providers: { credentials: {
   refreshTokenApiRoute: "/refresh", signInJsonResponseAccessTokenLocation: ["accessToken"],
@@ -62,4 +63,18 @@ export const hydrate = () => {
   document.body.appendChild(node);
   hydrateRoot(node, hydrationTree(), { onRecoverableError: error => hydrationErrors.push(String(error)) });
   return initial;
+};
+
+const RedirectScenario = ({ initialPath, to, reverse, authenticated }: { initialPath: string; to: string; reverse: boolean; authenticated: boolean }) => {
+  const current = useLocation();
+  const value = { isHydrating: false, isAuthenticated: authenticated } as React.ContextType<typeof TocTocAuthContext>;
+  return React.createElement(TocTocAuthContext.Provider, { value },
+    React.createElement("div", { id: "redirect-status" }, JSON.stringify({ pathname: current.pathname, search: current.search, hash: current.hash })),
+    current.pathname === initialPath ? React.createElement(TocTocRedirect, { to, reverse }, "protected") : null);
+};
+export const mountRedirect = (initial: string, to: string, reverse: boolean, authenticated: boolean) => {
+  const node = document.createElement("div");
+  document.body.appendChild(node);
+  createRoot(node).render(React.createElement(MemoryRouter, { initialEntries: [initial] },
+    React.createElement(RedirectScenario, { initialPath: new URL(initial, location.origin).pathname, to, reverse, authenticated })));
 };
