@@ -45,14 +45,9 @@ export const TocTocGuard = <TRole,>({
     );
   }
 
-  const roleLocation = userLocation.concat(
-    configs.providers.credentials?.signInJsonResponseUser?.roleLocation ?? []
-  );
-  if (
-    !roleLocation ||
-    roleLocation.length === 0 ||
-    utils.areStringArraysEquivalent(roleLocation, userLocation)
-  ) {
+  const roleLocation =
+    configs.providers.credentials?.signInJsonResponseUser?.roleLocation;
+  if (!roleLocation || roleLocation.length === 0) {
     throw createConfigError(
       `${utils.nameOf(
         () => configs.providers.credentials?.signInJsonResponseUser

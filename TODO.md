@@ -9,11 +9,10 @@ Findings from the library review, ordered by severity. Check items off when the 
 - 3 [x] Authenticate the IV and all relevant encryption metadata, preferably using authenticated encryption or separate encryption and MAC keys. Plan migration of existing stored sessions. (`src/services/crypto-service.ts`)
 - 4 [x] Prevent an in-flight refresh from restoring a signed-out session or overwriting a newer login; associate refreshes with a session generation and check it before persisting or retrying. (`src/services/toctoc-wrapper.ts`, `src/providers/toctoc-provider.tsx`)
 - 5 [x] Coordinate refreshes across wrapper instances and tabs, and handle delayed 401s using an older access token without unnecessarily refreshing again. Test with rotating refresh tokens. (`src/services/toctoc-wrapper.ts`, `src/services/refresh-manager.ts`)
-- 6 [ ] Support configurable server-side session or refresh-token revocation on sign-out, and document behavior when revocation is unavailable. (`src/providers/toctoc-provider.tsx`)
 
 ## Medium
 
-- 1 [ ] Fix role lookup in `TocTocGuard` to resolve `roleLocation` relative to the user object returned by `getUser()`. (`src/components/toctoc-guard.tsx`)
+- 1 [x] Fix role lookup in `TocTocGuard` to resolve `roleLocation` relative to the user object returned by `getUser()`. (`src/components/toctoc-guard.tsx`)
 - 2 [ ] Synchronize provider authentication and user state with refreshes, session clearing, and cross-tab storage changes. (`src/providers/toctoc-provider.tsx`, `src/services/toctoc-wrapper.ts`)
 - 3 [ ] Define and implement how expired access tokens affect initial authentication state and refresh. (`src/providers/toctoc-provider.tsx`)
 - 4 [ ] Fix `isTokenExpired` to decode Base64URL and UTF-8 correctly and reject missing or invalid `exp` values; document that it does not verify signatures. (`src/libs/token-utils.ts`)

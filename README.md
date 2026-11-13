@@ -69,7 +69,7 @@ export const authConfig = {
       signInJsonResponseRefreshTokenLocation: ["refreshToken"],
       signInJsonResponseUser: {
         location: ["user"],
-        roleLocation: ["role"], // user's role will be searched at locations + roleLocation (user.role)
+        roleLocation: ["role"], // path to the role relative to the user object
       },
     },
   },
@@ -300,7 +300,7 @@ if (isTokenExpired(myToken)) {
 | `signInJsonResponseAccessTokenLocation`  | string[] | Path to access token in API response                                    |
 | `signInJsonResponseRefreshTokenLocation` | string[] | Path to refresh token in API response                                   |
 | `signInJsonResponseUser.location`        | string[] | Path to user data in API response (optional)                            |
-| `signInJsonResponseUser.roleLocation`    | string[] | Additional path for user role (appended to user location)               |
+| `signInJsonResponseUser.roleLocation`    | string[] | Path to the role relative to the user object                            |
 
 > **Note:**
 > If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to `signInApiRoute` after registration. Make sure both endpoints accept the same payload structure.
