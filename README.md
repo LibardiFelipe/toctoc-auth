@@ -9,7 +9,7 @@ TocToc Auth is an authentication library for React applications. It provides JWT
 ## Features
 
 - JWT-based authentication with access and refresh tokens
-- Automatic token refresh and configurable retry logic for login and registration
+- Automatic token refresh and configurable retry logic for login
 - Refresh token coordination across wrapper instances and same-origin tabs using Web Locks
 - Client-side localStorage encryption with AES-256-CBC and PBKDF2-derived encryption and authentication keys
 - A local browser environment marker checked on uncached storage reads
@@ -291,7 +291,7 @@ if (isTokenExpired(myToken)) {
 | ----------------------- | ------ | ------------------------------------------------------- |
 | `apiBaseUrl`            | string | Base URL for API requests                               |
 | `encryptionKey`         | string | Client-accessible passphrase used to encrypt authentication data in localStorage; not a secret from page scripts |
-| `retryOptions`          | object | Optional retry configuration for network requests       |
+| `retryOptions`          | object | Optional retry configuration for login requests         |
 | `providers.credentials` | object | Configuration for username/password authentication      |
 
 ### Retry Options
@@ -340,12 +340,19 @@ The endpoint should return the same response format as your login endpoint, cont
 
 ### Retry Mechanism
 
-TocToc Auth includes a built-in retry mechanism for network requests with the following features:
+TocToc Auth retries login requests with the following policy:
 
 - **Exponential backoff**: Delays increase exponentially between retry attempts
 - **Jitter**: Random variance added to prevent thundering herd problems
-- **Configurable options**: Customize max retries, base delay, and max delay for login and registration. Refresh requests are not retried because the server may already have rotated the token when a response is lost.
-- **Smart retry conditions**: Only retries on network errors and specific HTTP status codes (408, 429, 500, 502, 503, 504)
+- **Configurable options**: Customize max retries, base delay, and max delay. `maxRetries` counts additional attempts; set it to 0 to disable retries.
+- **Retry conditions**: Login retries on network errors and HTTP status codes 408, 429, 500, 502, 503, and 504. Other HTTP responses are handled immediately. After the final attempt, a JSON response body is returned in the result or the final network error is thrown.
+
+Login retries can issue multiple requests when a response is lost. The login endpoint
+must tolerate repeated submissions, including any session-creation side effects; set
+`maxRetries` to 0 if it cannot. Registration and refresh are never retried automatically,
+even on these HTTP statuses or network errors: the server may have created an account or
+rotated a refresh token before the response was lost. Applications should resolve an
+uncertain registration outcome with the backend before submitting it again.
 
 Example retry configuration:
 

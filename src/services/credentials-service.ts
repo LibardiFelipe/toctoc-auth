@@ -6,6 +6,7 @@ import {
   createConfigError,
 } from "../libs";
 import { type TocTocAuthConfig, type TocTocResult } from "../types";
+import { isRetryableStatus } from "../libs/retry-utils";
 
 const { nameOf, hasNestedProperty } = utils;
 
@@ -28,22 +29,12 @@ const registerAsync = async <TResponse>(
   // Sanitize input to prevent prototype pollution
   const sanitizedData = sanitizeInput(data);
 
-  const response = await withRetry(
-    () =>
-      fetch(`${baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(sanitizedData),
-      }),
-    {
-      maxRetries: config.retryOptions?.maxRetries ?? 3,
-      baseDelay: config.retryOptions?.baseDelay ?? 1000,
-      maxDelay: config.retryOptions?.maxDelay ?? 5000,
-      retryCondition: isRetryableError,
-    }
-  );
+  // Registration may have succeeded even if its response is lost or an error.
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sanitizedData),
+  });
 
   const body = (await response.json()) as TResponse;
   return {
@@ -93,6 +84,8 @@ const loginAsync = async <TResponse>(
       baseDelay: config.retryOptions?.baseDelay ?? 1000,
       maxDelay: config.retryOptions?.maxDelay ?? 5000,
       retryCondition: isRetryableError,
+      retryResult: (result) => isRetryableStatus(result.status),
+      discardResult: async (result) => { try { await result.body?.cancel(); } catch { /* Best effort. */ } },
     }
   );
 

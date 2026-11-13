@@ -16,7 +16,7 @@ Findings from the library review, ordered by severity. Check items off when the 
 - 2 [x] Synchronize provider authentication and user state with refreshes, session clearing, and cross-tab storage changes. (`src/providers/toctoc-provider.tsx`, `src/services/toctoc-wrapper.ts`)
 - 3 [x] Define and implement how expired access tokens affect initial authentication state and refresh. (`src/providers/toctoc-provider.tsx`)
 - 4 [x] Fix `isTokenExpired` to decode Base64URL and UTF-8 correctly and reject missing or invalid `exp` values; document that it does not verify signatures. (`src/libs/token-utils.ts`)
-- 5 [ ] Implement documented HTTP-status retries explicitly, and make retries safe for non-idempotent registration and rotating refresh operations. (`src/services/credentials-service.ts`, `src/libs/retry-utils.ts`)
+- 5 [x] Implement documented HTTP-status retries explicitly, and make retries safe for non-idempotent registration and rotating refresh operations. (`src/services/credentials-service.ts`, `src/libs/retry-utils.ts`)
 - 6 [ ] Distinguish invalid or revoked refresh tokens from temporary network, server, and storage failures instead of clearing the session for every failure. (`src/services/toctoc-wrapper.ts`)
 - 7 [ ] Make provider rendering safe without browser storage, including SSR and blocked storage; define hydration behavior. (`src/providers/toctoc-provider.tsx`, `src/services/localStorage-service.ts`)
 - 8 [ ] Preserve encoded redirect values, existing target query parameters, and short query strings when constructing redirects. (`src/libs/url-validator.ts`, `src/components/toctoc-redirect.tsx`)
