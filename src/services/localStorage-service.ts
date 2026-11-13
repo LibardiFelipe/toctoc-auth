@@ -55,6 +55,27 @@ type DecryptCacheEntry = {
   value: unknown;
 };
 const decryptCache = new Map<string, DecryptCacheEntry>();
+const listeners = new Map<string, Set<() => void>>();
+
+const notify = (key: string) => {
+  for (const listener of listeners.get(key) ?? []) listener();
+};
+
+// Native storage events reach other documents, but not the document that wrote.
+const subscribe = (key: string, listener: () => void): (() => void) => {
+  let subscribers = listeners.get(key);
+  if (!subscribers) listeners.set(key, subscribers = new Set());
+  subscribers.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.storageArea === localStorage && (event.key === key || event.key === null)) listener();
+  };
+  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
+  return () => {
+    subscribers!.delete(listener);
+    if (subscribers!.size === 0) listeners.delete(key);
+    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+  };
+};
 
 const cacheLookupKey = (cacheKey: string, encryptKey: string): string =>
   `${cacheKey}${encryptKey}`;
@@ -91,8 +112,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
     const decryptedItem = cryptoService.decrypt(item, encryptKey);
 
     if (!decryptedItem || decryptedItem.trim() === "") {
-      localStorage.removeItem(cacheKey);
-      decryptCache.delete(lookup);
+      removeItem(cacheKey);
       return null;
     }
 
@@ -105,8 +125,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
 
       if (storedFingerprint !== currentFingerprint) {
         // An environment change can also cause a mismatch.
-        localStorage.removeItem(cacheKey);
-        decryptCache.delete(lookup);
+        removeItem(cacheKey);
         return null;
       }
 
@@ -120,8 +139,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
     return parsed as T;
   } catch {
     // Decryption or parsing failed - remove corrupted data
-    localStorage.removeItem(cacheKey);
-    decryptCache.delete(lookup);
+    removeItem(cacheKey);
     return null;
   }
 };
@@ -145,12 +163,13 @@ const setItem = <T>(cacheKey: string, value: T, encryptKey: string): void => {
     encryptKey,
     value: value as unknown,
   });
+  notify(cacheKey);
 };
 
 /**
  * Removes an item from localStorage.
  */
-const removeItem = (key: string): void => {
+function removeItem(key: string): void {
   localStorage.removeItem(key);
   const prefix = `${key}`;
   for (const lookup of decryptCache.keys()) {
@@ -158,10 +177,12 @@ const removeItem = (key: string): void => {
       decryptCache.delete(lookup);
     }
   }
-};
+  notify(key);
+}
 
 export const localStorageService = {
   getItem,
   setItem,
   removeItem,
+  subscribe,
 };

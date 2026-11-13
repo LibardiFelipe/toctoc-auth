@@ -239,6 +239,10 @@ The authentication context provides the following properties and methods:
 - `signOutAsync(): Promise<void>` — Sign out the current user.
 - `getUser<TUser>(): TUser | undefined` — Get the current user object (type-safe).
 
+The provider updates authentication and user state after library-managed session writes,
+including token refresh, and when another tab changes or clears local storage. Direct
+localStorage writes in the same tab do not notify the provider.
+
 ### Functions
 
 #### createTocTocAxiosWrapper(config, api)

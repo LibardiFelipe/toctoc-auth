@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useMemo, useCallback } from "react";
+import { type ReactNode, useState, useMemo, useCallback, useEffect } from "react";
 import { type TocTocAuthContent, type TocTocResult } from "../types";
 import { credentialsService, localStorageService } from "../services";
 import { utils, validateRedirectUrl } from "../libs";
@@ -52,10 +52,19 @@ export const TocTocAuthProvider = ({
   const navigate = useNavigate();
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const authContent = localStorageService.getItem<TocTocAuthContent>(
-    TOCTOC_AUTH_CACHE_KEY,
-    config.encryptionKey
+  const [authContent, setAuthContent] = useState(() =>
+    localStorageService.getItem<TocTocAuthContent>(TOCTOC_AUTH_CACHE_KEY, config.encryptionKey)
   );
+
+  useEffect(() => {
+    const update = () => setAuthContent(
+      localStorageService.getItem<TocTocAuthContent>(TOCTOC_AUTH_CACHE_KEY, config.encryptionKey)
+    );
+    const unsubscribe = localStorageService.subscribe(TOCTOC_AUTH_CACHE_KEY, update);
+    // Catch writes made between the initial read and effect subscription.
+    update();
+    return unsubscribe;
+  }, [config.encryptionKey]);
 
   const [searchParams] = useSearchParams();
 
