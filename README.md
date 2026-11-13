@@ -326,7 +326,14 @@ if (isTokenExpired(myToken)) {
 | `signInJsonResponseUser.roleLocation`    | string[] | Path to the role relative to the user object                            |
 
 > **Note:**
-> If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to `signInApiRoute` after registration. Make sure both endpoints accept the same payload structure.
+> If `signInAfterSignUp` is `true`, the same data sent to `signUpApiRoute` will be sent to
+> `signInApiRoute` after registration. Make sure both endpoints accept the same payload
+> structure.
+
+> **Note:**
+> `signInJsonResponseUser` is optional. If it is set, every login and refresh response must
+> include user data at the configured path; the library rejects responses that omit it. See
+> the [Refresh Token Endpoint](#refresh-token-endpoint) requirements above.
 
 ## Backend API Requirements
 
@@ -343,7 +350,19 @@ Content-Type: application/json
 }
 ```
 
-The endpoint should return the same response format as your login endpoint, containing new access and refresh tokens. Both login and refresh responses must provide each token as a nonempty string containing at least one non-whitespace character. Token strings are stored unchanged.
+The endpoint should return the same response format as your login endpoint, containing new
+access and refresh tokens. Both login and refresh responses must provide each token as a
+nonempty string containing at least one non-whitespace character. Token strings are stored
+unchanged.
+
+If your credentials provider configuration sets `signInJsonResponseUser` (and optionally
+`signInJsonResponseUser.roleLocation`), each login and refresh response must also include the
+user object at that configured path. The library enforces this: a response that omits the
+configured user data is rejected with a configuration error and the request is not treated
+as successful. If your endpoint cannot return user data, remove the
+`signInJsonResponseUser` configuration or have the endpoint return it. When the user path is
+not configured, the library stores the session using tokens only and `getUser()` returns
+`undefined`.
 
 ## Advanced Features
 
