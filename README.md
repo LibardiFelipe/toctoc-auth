@@ -4,15 +4,15 @@ A simple authentication library made for backend meatheads.
 
 ## Overview
 
-TocToc Auth is a lightweight, secure authentication library for React applications. It provides a straightforward way to implement JWT-based authentication with access and refresh tokens, keeping frontend developers from having to deal with the complexity of authentication flows.
+TocToc Auth is an authentication library for React applications. It provides JWT-based authentication with access and refresh tokens.
 
 ## Features
 
 - JWT-based authentication with access and refresh tokens
 - Automatic token refresh with retry logic and exponential backoff
 - Refresh token deduplication to prevent multiple simultaneous refresh requests
-- Encrypted local storage with AES-256-CBC, PBKDF2 key derivation, and HMAC integrity verification
-- Browser fingerprinting to detect token theft
+- Client-side localStorage encryption with AES-256-CBC and PBKDF2 key derivation; an HMAC checks the ciphertext only
+- A local browser environment marker checked on uncached storage reads
 - Client-side JWT expiration checking via `isTokenExpired` utility
 - Open redirect protection on all auth redirects
 - Input sanitization with prototype pollution prevention
@@ -48,7 +48,7 @@ import { TocTocAuthProvider } from "toctoc-auth";
 
 export const authConfig = {
   apiBaseUrl: "https://api.example.com",
-  encryptionKey: "your-strong-encryption-key",
+  encryptionKey: "your-client-side-encryption-key",
   retryOptions: {
     maxRetries: 3,
     baseDelay: 1000,
@@ -277,7 +277,7 @@ if (isTokenExpired(myToken)) {
 | Property                | Type   | Description                                             |
 | ----------------------- | ------ | ------------------------------------------------------- |
 | `apiBaseUrl`            | string | Base URL for API requests                               |
-| `encryptionKey`         | string | Key used to encrypt authentication data in localStorage |
+| `encryptionKey`         | string | Client-accessible passphrase used to encrypt authentication data in localStorage; not a secret from page scripts |
 | `retryOptions`          | object | Optional retry configuration for network requests       |
 | `providers.credentials` | object | Configuration for username/password authentication      |
 
@@ -359,10 +359,16 @@ This feature is automatically enabled and requires no additional configuration.
 
 ## Security
 
-### Built-in Protections
+### Storage and session security
 
-- **AES-256-CBC encryption** with PBKDF2 key derivation (100,000 iterations) and HMAC integrity verification for localStorage data
-- **Browser fingerprinting** to detect token theft across different environments
+The credentials flow receives access and refresh tokens in JSON and stores them in `localStorage`. It encrypts the stored record using AES-256-CBC with a PBKDF2-derived key (100,000 iterations) and checks an HMAC of the ciphertext. The IV and other encryption metadata are not authenticated, so the HMAC does not protect the entire stored record. Client-side code must have access to the configured passphrase and decrypted tokens: encryption does not protect them from malicious page scripts, including scripts running through XSS. A passphrase included in frontend code or configuration must not be treated as a secret.
+
+The stored record also contains a marker derived from browser properties. On an uncached read, a mismatch causes the local record to be removed. Browser properties can change, and the marker can be copied or imitated. This check neither proves token theft nor binds tokens to a browser on the server; a stolen bearer token can be replayed independently of it.
+
+For applications that need to keep session credentials out of JavaScript, consider a server-managed session using `HttpOnly`, `Secure` cookies with an appropriate `SameSite` policy. `HttpOnly` prevents scripts from reading the cookie value, but XSS can still perform authenticated actions. Because browsers send cookies automatically, use appropriate CSRF protections, such as CSRF tokens and origin validation, and configure cookie scope and cross-origin credentials deliberately. This requires a compatible backend and authentication flow. TocToc's current credentials flow requires tokens in JSON, stores them in JavaScript-accessible storage, and sends the refresh token in the request body; it does not implement an HttpOnly-cookie session flow.
+
+### Other protections
+
 - **Open redirect prevention** on all authentication redirects (blocks `javascript:`, `data:`, protocol-relative URLs, and external origins)
 - **Input sanitization** with prototype pollution prevention (`__proto__`, `constructor`, `prototype` keys are blocked)
 - **Environment-aware logging** — console output is suppressed in production to prevent information leakage
@@ -382,7 +388,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ### Best Practices
 
-- Use a strong, unique `encryptionKey` — this is the passphrase for PBKDF2 key derivation
+- Treat `encryptionKey` as client-accessible configuration, not as protection against page scripts
 - Always use HTTPS for API communications
 - Implement proper token expiration and rate limiting on the backend
 - Use proper CORS settings on your API

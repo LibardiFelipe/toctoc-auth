@@ -3,8 +3,8 @@ import { cryptoService } from ".";
 const FINGERPRINT_KEY = "__fp";
 
 /**
- * Generates a browser fingerprint for token binding.
- * This helps detect if tokens are being used from a different browser/device.
+ * Generates a local environment marker for comparison when reading stored data.
+ * It does not bind tokens to a device or prevent their theft or replay.
  */
 const generateFingerprint = (): string => {
   try {
@@ -38,7 +38,7 @@ const generateFingerprint = (): string => {
       components.push(canvas.toDataURL());
     }
 
-    // Create a hash of all components
+    // Encode and truncate the components; this is not a cryptographic hash.
     const fingerprint = components.join("|");
     return btoa(fingerprint).slice(0, 64);
   } catch {
@@ -61,7 +61,9 @@ const cacheLookupKey = (cacheKey: string, encryptKey: string): string =>
 
 /**
  * Retrieves and decrypts an item from localStorage.
- * Validates fingerprint to detect potential token theft.
+ * On an uncached read, compares any stored environment marker with the current
+ * one. A mismatch removes the record; it does not establish token theft.
+ * The key and decrypted data are available to page scripts.
  *
  * Decrypted values are memoized in module memory keyed by the raw ciphertext,
  * so repeated reads of an unchanged value skip PBKDF2 + AES-CBC.
@@ -102,7 +104,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
       const currentFingerprint = generateFingerprint();
 
       if (storedFingerprint !== currentFingerprint) {
-        // Fingerprint mismatch - possible token theft or browser change
+        // An environment change can also cause a mismatch.
         localStorage.removeItem(cacheKey);
         decryptCache.delete(lookup);
         return null;
@@ -126,7 +128,7 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
 
 /**
  * Encrypts and stores an item in localStorage.
- * Adds a browser fingerprint to the data for token binding.
+ * Adds a local environment marker; it is not server-side token binding.
  */
 const setItem = <T>(cacheKey: string, value: T, encryptKey: string): void => {
   const fingerprint = generateFingerprint();
