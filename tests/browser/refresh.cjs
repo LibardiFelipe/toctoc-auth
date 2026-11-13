@@ -157,3 +157,46 @@ test("expired JWTs start unauthenticated and refresh on a wrapped 401", async ()
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test("hydration restores a stored session without mismatch or premature redirect", async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/fixture.js") {
+      res.setHeader("Content-Type", "application/javascript");
+      res.end(fs.readFileSync("dist/tests/browser-fixture.js"));
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.end('<script src="/fixture.js"></script>');
+    }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH || undefined });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await page.goto(url);
+    await page.evaluate(() => fixture.init());
+    const initial = await page.evaluate(() => fixture.hydrate());
+    assert.match(initial, /"hydrating":true/);
+    assert.doesNotMatch(initial, /id="private"/);
+    await page.waitForFunction(() => {
+      const value = JSON.parse(document.querySelector("#hydration-status")?.textContent || "{}");
+      return !value.hydrating && value.authenticated && value.user?.role === "member" && value.path === "/private" && document.querySelector("#private");
+    });
+    assert.deepEqual(await page.evaluate(() => fixture.errors()), []);
+    const blocked = await context.newPage();
+    await blocked.addInitScript(() => Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new DOMException("blocked", "SecurityError"); } }));
+    await blocked.goto(url);
+    await blocked.evaluate(() => fixture.hydrate());
+    await blocked.waitForFunction(() => {
+      const value = JSON.parse(document.querySelector("#hydration-status")?.textContent || "{}");
+      return !value.hydrating && !value.authenticated && value.path === "/login";
+    });
+    assert.deepEqual(await blocked.evaluate(() => fixture.errors()), []);
+    await assert.rejects(blocked.evaluate(() => fixture.init()), /blocked/);
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

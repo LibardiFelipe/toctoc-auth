@@ -4,6 +4,7 @@ import { type TocTocResult } from "../types";
 type TocTocAuthContextType = {
   isAuthenticated: boolean;
   isAuthenticating: boolean;
+  isHydrating: boolean;
   signUpWithCredentialsAsync: <TResponse>(
     data: object
   ) => Promise<TocTocResult<TResponse>>;

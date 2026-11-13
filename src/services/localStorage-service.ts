@@ -67,7 +67,15 @@ const subscribe = (key: string, listener: () => void): (() => void) => {
   if (!subscribers) listeners.set(key, subscribers = new Set());
   subscribers.add(listener);
   const onStorage = (event: StorageEvent) => {
-    if (event.storageArea === localStorage && (event.key === key || event.key === null)) listener();
+    let storage: Storage;
+    try {
+      storage = localStorage;
+    } catch {
+      // Access to localStorage can be denied even after subscription.
+      listener();
+      return;
+    }
+    if (event.storageArea === storage && (event.key === key || event.key === null)) listener();
   };
   if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
   return () => {
@@ -93,7 +101,13 @@ const cacheLookupKey = (cacheKey: string, encryptKey: string): string =>
  */
 const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
   const lookup = cacheLookupKey(cacheKey, encryptKey);
-  const item = localStorage.getItem(cacheKey);
+  let item: string | null;
+  try {
+    item = localStorage.getItem(cacheKey);
+  } catch {
+    decryptCache.delete(lookup);
+    return null;
+  }
   if (item === null) {
     decryptCache.delete(lookup);
     return null;
@@ -108,40 +122,41 @@ const getItem = <T>(cacheKey: string, encryptKey: string): T | null => {
     return cached.value as T | null;
   }
 
+  let parsed: any;
   try {
     const decryptedItem = cryptoService.decrypt(item, encryptKey);
 
     if (!decryptedItem || decryptedItem.trim() === "") {
-      removeItem(cacheKey);
+      throw new Error("Empty storage record");
+    }
+
+    parsed = JSON.parse(decryptedItem);
+  } catch {
+    // A blocked removal must not make rendering fail.
+    try { removeItem(cacheKey); } catch { decryptCache.delete(lookup); }
+    return null;
+  }
+
+  // Verify fingerprint if present
+  if (parsed && typeof parsed === "object" && FINGERPRINT_KEY in parsed) {
+    const storedFingerprint = parsed[FINGERPRINT_KEY];
+    let currentFingerprint: string;
+    try { currentFingerprint = generateFingerprint(); } catch { return null; }
+
+    if (storedFingerprint !== currentFingerprint) {
+      // An environment change can also cause a mismatch.
+      try { removeItem(cacheKey); } catch { decryptCache.delete(lookup); }
       return null;
     }
 
-    const parsed = JSON.parse(decryptedItem);
-
-    // Verify fingerprint if present
-    if (parsed && typeof parsed === "object" && FINGERPRINT_KEY in parsed) {
-      const storedFingerprint = parsed[FINGERPRINT_KEY];
-      const currentFingerprint = generateFingerprint();
-
-      if (storedFingerprint !== currentFingerprint) {
-        // An environment change can also cause a mismatch.
-        removeItem(cacheKey);
-        return null;
-      }
-
-      // Remove fingerprint from returned data
-      const { [FINGERPRINT_KEY]: _, ...data } = parsed;
-      decryptCache.set(lookup, { ciphertext: item, encryptKey, value: data });
-      return data as T;
-    }
-
-    decryptCache.set(lookup, { ciphertext: item, encryptKey, value: parsed });
-    return parsed as T;
-  } catch {
-    // Decryption or parsing failed - remove corrupted data
-    removeItem(cacheKey);
-    return null;
+    // Remove fingerprint from returned data
+    const { [FINGERPRINT_KEY]: _, ...data } = parsed;
+    decryptCache.set(lookup, { ciphertext: item, encryptKey, value: data });
+    return data as T;
   }
+
+  decryptCache.set(lookup, { ciphertext: item, encryptKey, value: parsed });
+  return parsed as T;
 };
 
 /**

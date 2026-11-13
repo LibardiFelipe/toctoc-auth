@@ -53,9 +53,8 @@ export const TocTocAuthProvider = ({
   const navigate = useNavigate();
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authContent, setAuthContent] = useState(() =>
-    localStorageService.getItem<TocTocAuthContent>(TOCTOC_AUTH_CACHE_KEY, config.encryptionKey)
-  );
+  const [authContent, setAuthContent] = useState<TocTocAuthContent | null>(null);
+  const [isHydrating, setIsHydrating] = useState(true);
   const [expirationTick, setExpirationTick] = useState(0);
   const accessToken = authContent?.accessToken;
   const jwtLike = typeof accessToken === "string" && accessToken.split(".").length === 3;
@@ -75,6 +74,7 @@ export const TocTocAuthProvider = ({
     const unsubscribe = localStorageService.subscribe(TOCTOC_AUTH_CACHE_KEY, update);
     // Catch writes made between the initial read and effect subscription.
     update();
+    setIsHydrating(false);
     return unsubscribe;
   }, [config.encryptionKey]);
 
@@ -211,6 +211,7 @@ export const TocTocAuthProvider = ({
       signUpWithCredentialsAsync,
       signInWithCredentialsAsync,
       isAuthenticating,
+      isHydrating,
       isAuthenticated,
       signOutAsync,
       getUser,
@@ -219,6 +220,7 @@ export const TocTocAuthProvider = ({
       signUpWithCredentialsAsync,
       signInWithCredentialsAsync,
       isAuthenticating,
+      isHydrating,
       isAuthenticated,
       signOutAsync,
       getUser,

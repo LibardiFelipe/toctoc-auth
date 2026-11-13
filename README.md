@@ -234,6 +234,7 @@ The authentication context provides the following properties and methods:
 
 - `isAuthenticated: boolean` — Whether the user is currently authenticated.
 - `isAuthenticating: boolean` — Whether an authentication operation is in progress.
+- `isHydrating: boolean` — Whether the provider is restoring the browser session after its first render.
 - `signUpWithCredentialsAsync(data): Promise<TocTocResult>` — Register a new user.
 - `signInWithCredentialsAsync(data): Promise<TocTocResult>` — Sign in with credentials.
 - `signOutAsync(): Promise<void>` — Sign out the current user.
@@ -242,6 +243,14 @@ The authentication context provides the following properties and methods:
 The provider updates authentication and user state after library-managed session writes,
 including token refresh, and when another tab changes or clears local storage. Direct
 localStorage writes in the same tab do not notify the provider.
+
+During server rendering and the first browser render, `isHydrating` is true,
+`isAuthenticated` is false, and `getUser()` returns undefined. After mounting, the
+provider reads localStorage and sets `isHydrating` to false. `TocTocRedirect` waits for
+this step before redirecting; other auth-dependent UI should also wait for it. Server
+rendering cannot authenticate from this browser-only session. If storage is unavailable
+or blocked, the provider renders as unauthenticated; login cannot persist a session and
+storage write or removal failures are surfaced to the caller rather than reported as success.
 
 For JWT-shaped access tokens, `isAuthenticated` is false when the `exp` claim is
 missing, invalid, or expired, and changes when the token expires. Opaque tokens are

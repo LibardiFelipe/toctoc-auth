@@ -2,10 +2,12 @@ import axios from "axios";
 import { createTocTocAxiosWrapper } from "../../src/services/toctoc-wrapper";
 import { localStorageService } from "../../src/services/localStorage-service";
 import React from "react";
-import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
+import { createRoot, hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { TocTocAuthProvider } from "../../src/providers/toctoc-provider";
 import { useTocTocAuth } from "../../src/hooks";
+import { TocTocRedirect } from "../../src/components/toctoc-redirect";
 
 const config = { apiBaseUrl: location.origin, encryptionKey: "test", providers: { credentials: {
   refreshTokenApiRoute: "/refresh", signInJsonResponseAccessTokenLocation: ["accessToken"],
@@ -39,3 +41,25 @@ export const mount = () => {
 export const login = () => auth.signInWithCredentialsAsync({});
 export const logout = () => auth.signOutAsync();
 export const clear = () => localStorage.clear();
+
+const HydrationStatus = () => {
+  const value = useTocTocAuth();
+  const location = useLocation();
+  return React.createElement("div", { id: "hydration-status" }, JSON.stringify({
+    hydrating: value.isHydrating, authenticated: value.isAuthenticated,
+    user: value.getUser(), path: location.pathname,
+  }));
+};
+const hydrationTree = () => React.createElement(MemoryRouter, { initialEntries: ["/private"] },
+  React.createElement(TocTocAuthProvider, { config }, React.createElement(HydrationStatus),
+    React.createElement(TocTocRedirect, { to: "/login" }, React.createElement("div", { id: "private" }, "private"))));
+const hydrationErrors: string[] = [];
+export const errors = () => hydrationErrors;
+export const hydrate = () => {
+  const node = document.createElement("div");
+  node.innerHTML = renderToString(hydrationTree());
+  const initial = node.innerHTML;
+  document.body.appendChild(node);
+  hydrateRoot(node, hydrationTree(), { onRecoverableError: error => hydrationErrors.push(String(error)) });
+  return initial;
+};

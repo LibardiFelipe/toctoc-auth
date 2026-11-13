@@ -14,7 +14,7 @@ export const TocTocRedirect = ({
   to,
   reverse = false,
 }: TocTocProps): JSX.Element | null => {
-  const { isAuthenticated } = useTocTocAuth();
+  const { isAuthenticated, isHydrating } = useTocTocAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,8 +22,8 @@ export const TocTocRedirect = ({
 
   const currentPath = location.pathname;
 
-  const shouldRedirectNormal = !isAuthenticated && !reverse;
-  const shouldRedirectReverse = isAuthenticated && reverse;
+  const shouldRedirectNormal = !isHydrating && !isAuthenticated && !reverse;
+  const shouldRedirectReverse = !isHydrating && isAuthenticated && reverse;
 
   useEffect(() => {
     if (shouldRedirectNormal) {
@@ -57,7 +57,7 @@ export const TocTocRedirect = ({
     }
   }, [shouldRedirectReverse, searchParams, currentPath, navigate]);
 
-  if (shouldRedirectNormal || shouldRedirectReverse) {
+  if (isHydrating || shouldRedirectNormal || shouldRedirectReverse) {
     return null;
   }
 
