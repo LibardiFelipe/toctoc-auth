@@ -1,0 +1,48 @@
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const http = require("node:http");
+const fs = require("node:fs");
+const { chromium } = require("playwright");
+
+test("two tabs share one rotating refresh", async () => {
+  let refreshes = 0;
+  const server = http.createServer((req, res) => {
+    if (req.url === "/fixture.js") {
+      res.setHeader("Content-Type", "application/javascript");
+      res.end(fs.readFileSync("dist/tests/browser-fixture.js"));
+    } else if (req.url === "/refresh") {
+      refreshes++;
+      res.setHeader("Content-Type", "application/json");
+      setTimeout(() => {
+        if (refreshes > 1) { res.statusCode = 401; res.end("{}"); }
+        else res.end(JSON.stringify({ accessToken: "new-access", refreshToken: "new-refresh" }));
+      }, 500);
+    } else if (req.url === "/protected") {
+      res.statusCode = req.headers.authorization === "Bearer new-access" ? 200 : 401;
+      res.end("{}");
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.end('<script src="/fixture.js"></script>');
+    }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH || undefined });
+    const context = await browser.newContext();
+    const first = await context.newPage();
+    const second = await context.newPage();
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await first.goto(url);
+    await first.evaluate(() => fixture.init());
+    await second.goto(url);
+    const responses = await Promise.all([first.evaluate(() => fixture.call()), second.evaluate(() => fixture.call())]);
+    const session = await second.evaluate(() => fixture.session());
+    assert.deepEqual(responses, [200, 200]);
+    assert.equal(refreshes, 1);
+    assert.equal(session.refreshToken, "new-refresh");
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

@@ -8,7 +8,7 @@ Findings from the library review, ordered by severity. Check items off when the 
 - 2 [x] Correct the documentation's storage-encryption and browser-fingerprint security claims. Evaluate server-managed HttpOnly, Secure cookies where appropriate; client-side encryption and fingerprinting do not prevent token theft by page scripts or bind tokens server-side. (`README.md`, `src/services/localStorage-service.ts`)
 - 3 [x] Authenticate the IV and all relevant encryption metadata, preferably using authenticated encryption or separate encryption and MAC keys. Plan migration of existing stored sessions. (`src/services/crypto-service.ts`)
 - 4 [x] Prevent an in-flight refresh from restoring a signed-out session or overwriting a newer login; associate refreshes with a session generation and check it before persisting or retrying. (`src/services/toctoc-wrapper.ts`, `src/providers/toctoc-provider.tsx`)
-- 5 [ ] Coordinate refreshes across wrapper instances and tabs, and handle delayed 401s using an older access token without unnecessarily refreshing again. Test with rotating refresh tokens. (`src/services/toctoc-wrapper.ts`, `src/services/refresh-manager.ts`)
+- 5 [x] Coordinate refreshes across wrapper instances and tabs, and handle delayed 401s using an older access token without unnecessarily refreshing again. Test with rotating refresh tokens. (`src/services/toctoc-wrapper.ts`, `src/services/refresh-manager.ts`)
 - 6 [ ] Support configurable server-side session or refresh-token revocation on sign-out, and document behavior when revocation is unavailable. (`src/providers/toctoc-provider.tsx`)
 
 ## Medium

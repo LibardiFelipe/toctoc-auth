@@ -31,7 +31,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts && copy README.md dist\\",
     "prepublishOnly": "npm run build",
-    "test": "tsup tests/*.test.ts --format cjs --target node18 --out-dir dist/tests && node --test dist/tests/*.test.js"
+    "test": "tsup tests/*.test.ts --format cjs --target node18 --out-dir dist/tests && node --test dist/tests/*.test.js",
+    "test:browser": "esbuild tests/browser/fixture.ts --bundle --platform=browser --format=iife --global-name=fixture --outfile=dist/tests/browser-fixture.js && node --test tests/browser/refresh.cjs"
   },
   "dependencies": {
     "axios": "^1.10.0",
@@ -51,6 +52,8 @@
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
     "copyfiles": "^2.4.1",
+    "esbuild": "^0.27.7",
+    "playwright": "^1.65.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   }

@@ -5,7 +5,15 @@ import { createTocTocAxiosWrapper } from "../src/services/toctoc-wrapper";
 import { credentialsService, localStorageService } from "../src/services";
 import { type TocTocAuthConfig } from "../src/types";
 import { advanceSessionGeneration } from "../src/services/session-generation";
-import { RefreshTokenManager } from "../src/services/refresh-manager";
+// Model the origin-wide exclusivity of Web Locks, shared by wrapper instances.
+let lockQueue: Promise<unknown> = Promise.resolve();
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: { locks: {
+  request: (_name: string, callback: () => unknown) => {
+    const result = lockQueue.then(callback);
+    lockQueue = result.catch(() => {});
+    return result;
+  },
+} } });
 
 const config = {
   apiBaseUrl: "https://api.example.com",
@@ -13,22 +21,9 @@ const config = {
   providers: {},
 } as TocTocAuthConfig;
 
-test("a new session does not reuse an older session's pending refresh", async () => {
-  const manager = new RefreshTokenManager();
-  const completions: Array<(value: any) => void> = [];
-  const refresh = () => new Promise<any>(resolve => completions.push(resolve));
-  const first = manager.refresh(config, "same-token", refresh, 1);
-  const second = manager.refresh(config, "same-token", refresh, 2);
-  assert.equal(completions.length, 2);
-  completions[0]({ isSuccess: true, responseBody: "old" });
-  completions[1]({ isSuccess: true, responseBody: "new" });
-  assert.equal((await first).responseBody, "old");
-  assert.equal((await second).responseBody, "new");
-});
-
 test("injects only into trusted requests without an existing Authorization header", async () => {
   const originalGet = localStorageService.getItem;
-  localStorageService.getItem = (() => ({ accessToken: "secret" })) as typeof originalGet;
+  localStorageService.getItem = (() => ({ accessToken: "secret", sessionId: "session" })) as typeof originalGet;
   try {
     const seen: Array<string | undefined> = [];
     const adapter: AxiosAdapter = async request => {
@@ -54,7 +49,7 @@ test("refreshes only requests authenticated by the wrapper", async () => {
   const originalSet = localStorageService.setItem;
   const originalRefresh = credentialsService.refreshTokenAsync;
   let refreshes = 0;
-  let session = { accessToken: "old", refreshToken: "refresh" };
+  let session = { accessToken: "old", refreshToken: "refresh", sessionId: "session" };
   localStorageService.getItem = (() => session) as typeof originalGet;
   localStorageService.setItem = ((_key: string, value: typeof session) => { session = value; }) as typeof originalSet;
   credentialsService.refreshTokenAsync = (async () => {
@@ -89,7 +84,7 @@ for (const change of ["sign out", "new login", "new login with same tokens"] as 
       const originalSet = localStorageService.setItem;
       const originalRemove = localStorageService.removeItem;
       const originalRefresh = credentialsService.refreshTokenAsync;
-      let session: { accessToken: string; refreshToken: string } | null = { accessToken: "old", refreshToken: "refresh" };
+      let session: { accessToken: string; refreshToken: string; sessionId: string } | null = { accessToken: "old", refreshToken: "refresh", sessionId: "session" };
       let writes = 0;
       let requests = 0;
       let start!: () => void;
@@ -113,8 +108,8 @@ for (const change of ["sign out", "new login", "new login with same tokens"] as 
         await started;
         advanceSessionGeneration(); // The provider advances this on sign-out and successful sign-in.
         session = change === "sign out" ? null : change === "new login" ?
-          { accessToken: "new-login", refreshToken: "new-refresh" } :
-          { accessToken: "old", refreshToken: "refresh" };
+          { accessToken: "new-login", refreshToken: "new-refresh", sessionId: "new-session" } :
+          { accessToken: "old", refreshToken: "refresh", sessionId: "new-session" };
         const expected = session;
         if (outcome === "error") fail(new Error("network error"));
         else complete(outcome === "failure" ? { isSuccess: false } :
@@ -137,7 +132,7 @@ test("cancels a queued retry if the session changes before its interceptor runs"
   const originalGet = localStorageService.getItem;
   const originalSet = localStorageService.setItem;
   const originalRefresh = credentialsService.refreshTokenAsync;
-  let session: { accessToken: string; refreshToken: string } | null = { accessToken: "old", refreshToken: "refresh" };
+  let session: { accessToken: string; refreshToken: string; sessionId: string } | null = { accessToken: "old", refreshToken: "refresh", sessionId: "session" };
   let requests = 0;
   localStorageService.getItem = (() => session) as typeof originalGet;
   localStorageService.setItem = ((_key: string, value: typeof session) => { session = value; }) as typeof originalSet;
@@ -165,5 +160,94 @@ test("cancels a queued retry if the session changes before its interceptor runs"
     localStorageService.getItem = originalGet;
     localStorageService.setItem = originalSet;
     credentialsService.refreshTokenAsync = originalRefresh;
+  }
+});
+
+test("wrapper instances serialize rotating refreshes and reuse the result for delayed 401s", async () => {
+  const originalGet = localStorageService.getItem;
+  const originalSet = localStorageService.setItem;
+  const originalRefresh = credentialsService.refreshTokenAsync;
+  let session = { accessToken: "access-0", refreshToken: "refresh-0", sessionId: "session" };
+  let refreshes = 0;
+  let releaseRefresh!: () => void;
+  let startedRefresh!: () => void;
+  const started = new Promise<void>(resolve => { startedRefresh = resolve; });
+  const gate = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  let releaseDelayed!: () => void;
+  const delayed = new Promise<void>(resolve => { releaseDelayed = resolve; });
+  localStorageService.getItem = (() => session) as typeof originalGet;
+  localStorageService.setItem = ((_key: string, value: typeof session) => { session = value; }) as typeof originalSet;
+  credentialsService.refreshTokenAsync = (async (_config: unknown, token: string) => {
+    refreshes++;
+    assert.equal(token, "refresh-0", "a rotating refresh token must only be used once");
+    startedRefresh();
+    await gate;
+    return { isSuccess: true, responseBody: { accessToken: "access-1", refreshToken: "refresh-1" } };
+  }) as typeof originalRefresh;
+  try {
+    const adapter: AxiosAdapter = async request => {
+      if (request.headers.get("Authorization") === "Bearer access-1") {
+        return { data: {}, status: 200, statusText: "OK", headers: {}, config: request };
+      }
+      if (request.url === "/delayed") await delayed;
+      const response = { data: {}, status: 401, statusText: "Unauthorized", headers: {}, config: request };
+      throw new AxiosError("Unauthorized", "ERR_BAD_REQUEST", request, undefined, response);
+    };
+    const one = createTocTocAxiosWrapper(config, axios.create({ baseURL: config.apiBaseUrl, adapter }));
+    const two = createTocTocAxiosWrapper(config, axios.create({ baseURL: config.apiBaseUrl, adapter }));
+    const first = one.get("/first");
+    const second = two.get("/second");
+    const third = two.get("/delayed");
+    await started;
+    releaseRefresh();
+    await Promise.all([first, second]);
+    releaseDelayed();
+    await third;
+    assert.equal(refreshes, 1);
+    assert.equal(session.refreshToken, "refresh-1");
+  } finally {
+    localStorageService.getItem = originalGet;
+    localStorageService.setItem = originalSet;
+    credentialsService.refreshTokenAsync = originalRefresh;
+  }
+});
+
+test("without Web Locks a 401 neither refreshes nor clears the session", async () => {
+  const nav = Object.getOwnPropertyDescriptor(globalThis, "navigator")!;
+  const originalGet = localStorageService.getItem;
+  const originalRefresh = credentialsService.refreshTokenAsync;
+  let refreshes = 0;
+  const session = { accessToken: "old", refreshToken: "refresh", sessionId: "session" };
+  localStorageService.getItem = (() => session) as typeof originalGet;
+  credentialsService.refreshTokenAsync = (async () => { refreshes++; throw new Error("unexpected"); }) as typeof originalRefresh;
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: {} });
+  try {
+    const adapter: AxiosAdapter = async request => {
+      const response = { data: {}, status: 401, statusText: "Unauthorized", headers: {}, config: request };
+      throw new AxiosError("Unauthorized", "ERR_BAD_REQUEST", request, undefined, response);
+    };
+    const api = createTocTocAxiosWrapper(config, axios.create({ baseURL: config.apiBaseUrl, adapter }));
+    await assert.rejects(api.get("/private"));
+    assert.equal(refreshes, 0);
+    assert.equal(localStorageService.getItem("key", "key"), session);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", nav);
+    localStorageService.getItem = originalGet;
+    credentialsService.refreshTokenAsync = originalRefresh;
+  }
+});
+
+test("a lost refresh response is not retried with the same rotating token", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; throw new TypeError("network failure"); }) as typeof fetch;
+  try {
+    const refreshConfig = { ...config, retryOptions: { maxRetries: 3 }, providers: { credentials: {
+      refreshTokenApiRoute: "/refresh",
+    } } } as TocTocAuthConfig;
+    await assert.rejects(credentialsService.refreshTokenAsync(refreshConfig, "rotating-token"));
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

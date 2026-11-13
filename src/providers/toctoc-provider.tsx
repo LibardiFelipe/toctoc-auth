@@ -5,6 +5,7 @@ import { utils, validateRedirectUrl } from "../libs";
 import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { advanceSessionGeneration } from "../services/session-generation";
+import { createSessionId, withOptionalSessionLock } from "../services/refresh-manager";
 
 export type TocTocAuthConfig = {
   apiBaseUrl: string;
@@ -94,12 +95,14 @@ export const TocTocAuthProvider = ({
           )!,
         };
 
-        advanceSessionGeneration();
-        localStorageService.setItem(
-          TOCTOC_AUTH_CACHE_KEY,
-          authContent,
-          config.encryptionKey
-        );
+        await withOptionalSessionLock(() => {
+          advanceSessionGeneration();
+          localStorageService.setItem(
+            TOCTOC_AUTH_CACHE_KEY,
+            { ...authContent, sessionId: createSessionId() },
+            config.encryptionKey
+          );
+        });
 
         const target = validateRedirectUrl(
           searchParams.get("redirect"),
@@ -164,8 +167,10 @@ export const TocTocAuthProvider = ({
 
     try {
       advanceSessionGeneration();
-      localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
-      sessionStorage.removeItem(TOCTOC_AUTH_CACHE_KEY);
+      await withOptionalSessionLock(() => {
+        localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
+        sessionStorage.removeItem(TOCTOC_AUTH_CACHE_KEY);
+      });
 
       if (credentials?.redirectClientRoutes.afterSignOut) {
         navigate(credentials.redirectClientRoutes.afterSignOut, {

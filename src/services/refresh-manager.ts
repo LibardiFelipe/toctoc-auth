@@ -1,57 +1,18 @@
-import { type TocTocAuthConfig, type TocTocResult } from "../types";
+import CryptoJS from "crypto-js";
 
-export class RefreshTokenManager {
-  private pendingRefresh: Promise<TocTocResult<unknown>> | null = null;
-  private pendingSession: string | null = null;
-  private isRefreshing = false;
+const LOCK_NAME = "toctoc-auth:session";
 
-  async refresh<TResponse>(
-    config: TocTocAuthConfig,
-    refreshToken: string,
-    refreshFn: (
-      config: TocTocAuthConfig,
-      token: string
-    ) => Promise<TocTocResult<TResponse>>,
-    generation: number
-  ): Promise<TocTocResult<TResponse>> {
-    // If there's already a pending refresh, return it
-    // This prevents race conditions by checking the promise immediately
-    const session = `${generation}:${refreshToken}`;
-    if (this.pendingRefresh && this.pendingSession === session) {
-      return this.pendingRefresh as Promise<TocTocResult<TResponse>>;
-    }
+export const createSessionId = () => CryptoJS.lib.WordArray.random(16).toString();
 
-    // Create the refresh promise immediately to prevent race conditions
-    // Any concurrent calls will see pendingRefresh as non-null
-    this.pendingSession = session;
-    const pending = (async (): Promise<TocTocResult<TResponse>> => {
-      this.isRefreshing = true;
-      try {
-        return await refreshFn(config, refreshToken);
-      } finally {
-        this.isRefreshing = false;
-        // Small delay before clearing to handle near-simultaneous requests
-        // that might check pendingRefresh right after it's set to null
-        setTimeout(() => {
-          if (this.pendingRefresh === pending) {
-            this.pendingRefresh = null;
-            this.pendingSession = null;
-          }
-        }, 100);
-      }
-    })();
+export const hasSessionLock = () =>
+  typeof navigator !== "undefined" && typeof navigator.locks?.request === "function";
 
-    this.pendingRefresh = pending;
-    return pending;
-  }
+/** All refresh, login and logout writes share the same origin-wide lock. */
+export const withSessionLock = async <T>(operation: () => Promise<T> | T): Promise<T> => {
+  if (!hasSessionLock()) throw new Error("Web Locks are required for token refresh");
+  return navigator.locks.request(LOCK_NAME, operation);
+};
 
-  isCurrentlyRefreshing(): boolean {
-    return this.isRefreshing;
-  }
-
-  reset(): void {
-    this.isRefreshing = false;
-    this.pendingRefresh = null;
-    this.pendingSession = null;
-  }
-}
+/** Login/logout remain available without Web Locks, when refresh is disabled. */
+export const withOptionalSessionLock = async <T>(operation: () => Promise<T> | T): Promise<T> =>
+  hasSessionLock() ? withSessionLock(operation) : operation();

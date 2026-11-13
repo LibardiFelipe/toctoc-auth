@@ -9,8 +9,8 @@ TocToc Auth is an authentication library for React applications. It provides JWT
 ## Features
 
 - JWT-based authentication with access and refresh tokens
-- Automatic token refresh with retry logic and exponential backoff
-- Refresh token deduplication to prevent multiple simultaneous refresh requests
+- Automatic token refresh and configurable retry logic for login and registration
+- Refresh token coordination across wrapper instances and same-origin tabs using Web Locks
 - Client-side localStorage encryption with AES-256-CBC and PBKDF2-derived encryption and authentication keys
 - A local browser environment marker checked on uncached storage reads
 - Client-side JWT expiration checking via `isTokenExpired` utility
@@ -221,7 +221,7 @@ await api.get("/some-protected-route");
 
 - The wrapper attaches the access token only when the resolved request URL has the same HTTP(S) origin (scheme, host, and port) as `apiBaseUrl`. Set the Axios `baseURL` accordingly; relative URLs must be resolvable against the document's base URL.
 - Existing `Authorization` headers, including Axios defaults, are left untouched. Only requests authenticated by the wrapper trigger token refresh on a 401 response.
-- Includes refresh token deduplication to prevent multiple simultaneous refresh attempts
+- Coordinates refreshes across wrapper instances and same-origin tabs using Web Locks
 - If the refresh fails, the user will be signed out and redirected
 
 ## API Reference
@@ -252,7 +252,6 @@ Features:
 
 - Automatically attaches access tokens to requests
 - Handles token refresh on 401 responses with deduplication
-- Implements retry logic with exponential backoff
 - Clears session and redirects on refresh failure
 
 #### isTokenExpired(token)
@@ -331,7 +330,7 @@ TocToc Auth includes a built-in retry mechanism for network requests with the fo
 
 - **Exponential backoff**: Delays increase exponentially between retry attempts
 - **Jitter**: Random variance added to prevent thundering herd problems
-- **Configurable options**: Customize max retries, base delay, and max delay
+- **Configurable options**: Customize max retries, base delay, and max delay for login and registration. Refresh requests are not retried because the server may already have rotated the token when a response is lost.
 - **Smart retry conditions**: Only retries on network errors and specific HTTP status codes (408, 429, 500, 502, 503, 504)
 
 Example retry configuration:
@@ -349,13 +348,11 @@ const authConfig = {
 
 ### Refresh Token Deduplication
 
-The library includes a `RefreshTokenManager` that prevents multiple simultaneous refresh token requests:
+The wrapper uses the browser's Web Locks API to serialize refresh operations across wrapper instances and tabs that share the same origin and storage. After acquiring the lock it reads the session again: if another request already rotated the tokens, it retries with the current access token instead of refreshing again. Login and logout storage changes use the same lock, so they can wait for an in-flight refresh to finish.
 
-- **Single refresh request**: Multiple expired requests share one refresh operation
-- **State management**: Tracks refresh status to avoid duplicate calls
-- **Automatic cleanup**: Resets state after successful or failed refresh attempts
+Web Locks requires a supported browser and a secure context (HTTPS or localhost). If unavailable, ordinary requests, login and logout still work, but automatic refresh is disabled: a 401 is returned to the caller and the session is not cleared. Applications must handle that response. Existing sessions without a session identifier are upgraded when first used; simultaneous requests during that one-time upgrade may be canceled and can be retried. Cross-origin pages, separate browser profiles, and older library versions do not share this coordination.
 
-This feature is automatically enabled and requires no additional configuration.
+To run the two-tab integration test, install Playwright's Chromium (`npx playwright install chromium`) and run `npm run test:browser`. Alternatively, set `TEST_CHROMIUM_PATH` to an existing Chromium executable.
 
 ## Security
 
@@ -374,7 +371,7 @@ For applications that need to keep session credentials out of JavaScript, consid
 - **Open redirect prevention** on all authentication redirects (blocks `javascript:`, `data:`, protocol-relative URLs, and external origins)
 - **Input sanitization** with prototype pollution prevention (`__proto__`, `constructor`, `prototype` keys are blocked)
 - **Environment-aware logging** — console output is suppressed in production to prevent information leakage
-- **Refresh session checks** prevent an in-flight refresh from replacing a session changed by login or logout in the same JavaScript context. Refresh coordination across wrapper instances and tabs is not provided.
+- **Refresh session checks** and an origin-wide lock prevent an in-flight refresh from replacing a session changed through this library's login or logout.
 
 ### Recommended Server-Side Headers
 

@@ -189,22 +189,13 @@ const refreshTokenAsync = async <TResponse>(
   }
 
   const refreshUrl = `${baseUrl}${path}`;
-  const response = await withRetry(
-    () =>
-      fetch(refreshUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ refreshToken }),
-      }),
-    {
-      maxRetries: config.retryOptions?.maxRetries ?? 3,
-      baseDelay: config.retryOptions?.baseDelay ?? 1000,
-      maxDelay: config.retryOptions?.maxDelay ?? 5000,
-      retryCondition: isRetryableError,
-    }
-  );
+  // The server may have rotated the token even if its response was lost.
+  // Retrying the same token could revoke the newly issued token family.
+  const response = await fetch(refreshUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
 
   const body = (await response.json()) as TResponse;
   if (!response.ok) {

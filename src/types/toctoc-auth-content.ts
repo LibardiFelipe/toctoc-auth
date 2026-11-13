@@ -3,4 +3,5 @@ export type TocTocAuthContent = {
   user?: object;
   accessToken: string;
   refreshToken: string;
+  sessionId?: string;
 };
