@@ -219,7 +219,8 @@ export const api = createTocTocAxiosWrapper(
 await api.get("/some-protected-route");
 ```
 
-- The wrapper will automatically attach the access token to requests and handle token refresh on 401 errors
+- The wrapper attaches the access token only when the resolved request URL has the same HTTP(S) origin (scheme, host, and port) as `apiBaseUrl`. Set the Axios `baseURL` accordingly; relative URLs must be resolvable against the document's base URL.
+- Existing `Authorization` headers, including Axios defaults, are left untouched. Only requests authenticated by the wrapper trigger token refresh on a 401 response.
 - Includes refresh token deduplication to prevent multiple simultaneous refresh attempts
 - If the refresh fails, the user will be signed out and redirected
 

@@ -10,6 +10,7 @@ export const createTocTocAxiosWrapper = (
   api: AxiosInstance
 ): AxiosInstance => {
   const refreshManager = new RefreshTokenManager();
+  const authenticatedRequests = new WeakSet<InternalAxiosRequestConfig>();
   const signOutRedirectRoute =
     tocTocConfig.providers.credentials?.redirectClientRoutes.afterSignOut;
 
@@ -18,12 +19,31 @@ export const createTocTocAxiosWrapper = (
     tocTocConfig.encryptionKey
   );
 
+  const isTrustedRequest = (config: InternalAxiosRequestConfig): boolean => {
+    try {
+      // Axios resolves relative URLs against the document's base URL in browsers.
+      const base = typeof document === "undefined" ? undefined : document.baseURI;
+      const trusted = new URL(tocTocConfig.apiBaseUrl, base);
+      const target = new URL(api.getUri(config), base);
+      return (trusted.protocol === "https:" || trusted.protocol === "http:") &&
+        target.origin === trusted.origin;
+    } catch {
+      // An unresolvable URL must never receive credentials.
+      return false;
+    }
+  };
+
   api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+      if (!isTrustedRequest(config) || config.headers.has("Authorization")) {
+        return config;
+      }
+
       const authContent = getAuthContent();
 
       if (authContent?.accessToken) {
-        config.headers.Authorization = `Bearer ${authContent.accessToken}`;
+        config.headers.set("Authorization", `Bearer ${authContent.accessToken}`);
+        authenticatedRequests.add(config);
       }
 
       return config;
@@ -36,7 +56,9 @@ export const createTocTocAxiosWrapper = (
     async (error) => {
       const originalRequest = error.config;
 
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      if (originalRequest && error.response?.status === 401 &&
+          !originalRequest._retry && authenticatedRequests.has(originalRequest) &&
+          isTrustedRequest(originalRequest)) {
         originalRequest._retry = true;
 
         try {
