@@ -4,6 +4,7 @@ import { credentialsService, localStorageService } from "../services";
 import { utils, validateRedirectUrl } from "../libs";
 import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { advanceSessionGeneration } from "../services/session-generation";
 
 export type TocTocAuthConfig = {
   apiBaseUrl: string;
@@ -93,6 +94,7 @@ export const TocTocAuthProvider = ({
           )!,
         };
 
+        advanceSessionGeneration();
         localStorageService.setItem(
           TOCTOC_AUTH_CACHE_KEY,
           authContent,
@@ -161,6 +163,7 @@ export const TocTocAuthProvider = ({
     setIsAuthenticating(true);
 
     try {
+      advanceSessionGeneration();
       localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
       sessionStorage.removeItem(TOCTOC_AUTH_CACHE_KEY);
 

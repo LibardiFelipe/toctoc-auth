@@ -1,16 +1,24 @@
-import { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
+import { CanceledError, type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 import { credentialsService, localStorageService } from ".";
 import { utils, logger } from "../libs";
 import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
 import { TOCTOC_AUTH_CACHE_KEY } from "../providers/toctoc-provider";
 import { RefreshTokenManager } from "./refresh-manager";
+import { advanceSessionGeneration, getSessionGeneration } from "./session-generation";
+
+type SessionSnapshot = {
+  generation: number;
+  accessToken: string;
+  refreshToken: string;
+};
+type RetryConfig = InternalAxiosRequestConfig & { __tocTocRetrySession?: SessionSnapshot };
 
 export const createTocTocAxiosWrapper = (
   tocTocConfig: TocTocAuthConfig,
   api: AxiosInstance
 ): AxiosInstance => {
   const refreshManager = new RefreshTokenManager();
-  const authenticatedRequests = new WeakSet<InternalAxiosRequestConfig>();
+  const authenticatedRequests = new WeakMap<InternalAxiosRequestConfig, SessionSnapshot>();
   const signOutRedirectRoute =
     tocTocConfig.providers.credentials?.redirectClientRoutes.afterSignOut;
 
@@ -18,6 +26,13 @@ export const createTocTocAxiosWrapper = (
     TOCTOC_AUTH_CACHE_KEY,
     tocTocConfig.encryptionKey
   );
+
+  const isCurrentSession = (snapshot: SessionSnapshot): boolean => {
+    if (snapshot.generation !== getSessionGeneration()) return false;
+    const current = getAuthContent();
+    return current?.accessToken === snapshot.accessToken &&
+      current?.refreshToken === snapshot.refreshToken;
+  };
 
   const isTrustedRequest = (config: InternalAxiosRequestConfig): boolean => {
     try {
@@ -35,6 +50,10 @@ export const createTocTocAxiosWrapper = (
 
   api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+      const retrySession = (config as RetryConfig).__tocTocRetrySession;
+      if (retrySession && !isCurrentSession(retrySession)) {
+        throw new CanceledError("Session changed before the request could be retried", config);
+      }
       if (!isTrustedRequest(config) || config.headers.has("Authorization")) {
         return config;
       }
@@ -43,7 +62,11 @@ export const createTocTocAxiosWrapper = (
 
       if (authContent?.accessToken) {
         config.headers.set("Authorization", `Bearer ${authContent.accessToken}`);
-        authenticatedRequests.add(config);
+        authenticatedRequests.set(config, {
+          generation: getSessionGeneration(),
+          accessToken: authContent.accessToken,
+          refreshToken: authContent.refreshToken,
+        });
       }
 
       return config;
@@ -55,9 +78,10 @@ export const createTocTocAxiosWrapper = (
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
+      const snapshot = originalRequest && authenticatedRequests.get(originalRequest);
 
       if (originalRequest && error.response?.status === 401 &&
-          !originalRequest._retry && authenticatedRequests.has(originalRequest) &&
+          !originalRequest._retry && snapshot && isCurrentSession(snapshot) &&
           isTrustedRequest(originalRequest)) {
         originalRequest._retry = true;
 
@@ -68,8 +92,11 @@ export const createTocTocAxiosWrapper = (
             const response = await refreshManager.refresh(
               tocTocConfig,
               authContent.refreshToken,
-              credentialsService.refreshTokenAsync
+              credentialsService.refreshTokenAsync,
+              snapshot.generation
             );
+
+            if (!isCurrentSession(snapshot)) return Promise.reject(error);
 
             if (!response.isSuccess) {
               logger.warn("Failed to refresh token. Clearing session.");
@@ -116,6 +143,11 @@ export const createTocTocAxiosWrapper = (
             );
 
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            (originalRequest as RetryConfig).__tocTocRetrySession = {
+              generation: snapshot.generation,
+              accessToken: newAccessToken!,
+              refreshToken: newRefreshToken!,
+            };
 
             return api(originalRequest);
           }
@@ -123,6 +155,7 @@ export const createTocTocAxiosWrapper = (
           logger.warn("No refresh token available. Clearing session.");
           clearAndRedirect(signOutRedirectRoute);
         } catch (refreshError) {
+          if (!isCurrentSession(snapshot)) return Promise.reject(error);
           logger.error("Error refreshing token:", refreshError);
           refreshManager.reset();
           clearAndRedirect(signOutRedirectRoute);
@@ -137,6 +170,7 @@ export const createTocTocAxiosWrapper = (
 };
 
 const clearAndRedirect = (redirectRoute?: string) => {
+  advanceSessionGeneration();
   localStorageService.removeItem(TOCTOC_AUTH_CACHE_KEY);
   if (redirectRoute) {
     window.location.replace(redirectRoute);

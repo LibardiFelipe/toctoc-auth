@@ -374,7 +374,7 @@ For applications that need to keep session credentials out of JavaScript, consid
 - **Open redirect prevention** on all authentication redirects (blocks `javascript:`, `data:`, protocol-relative URLs, and external origins)
 - **Input sanitization** with prototype pollution prevention (`__proto__`, `constructor`, `prototype` keys are blocked)
 - **Environment-aware logging** — console output is suppressed in production to prevent information leakage
-- **Race condition prevention** in token refresh via promise deduplication
+- **Refresh session checks** prevent an in-flight refresh from replacing a session changed by login or logout in the same JavaScript context. Refresh coordination across wrapper instances and tabs is not provided.
 
 ### Recommended Server-Side Headers
 
