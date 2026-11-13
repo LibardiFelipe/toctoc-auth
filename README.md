@@ -11,7 +11,7 @@ TocToc Auth is an authentication library for React applications. It provides JWT
 - JWT-based authentication with access and refresh tokens
 - Automatic token refresh with retry logic and exponential backoff
 - Refresh token deduplication to prevent multiple simultaneous refresh requests
-- Client-side localStorage encryption with AES-256-CBC and PBKDF2 key derivation; an HMAC checks the ciphertext only
+- Client-side localStorage encryption with AES-256-CBC and PBKDF2-derived encryption and authentication keys
 - A local browser environment marker checked on uncached storage reads
 - Client-side JWT expiration checking via `isTokenExpired` utility
 - Open redirect protection on all auth redirects
@@ -361,7 +361,9 @@ This feature is automatically enabled and requires no additional configuration.
 
 ### Storage and session security
 
-The credentials flow receives access and refresh tokens in JSON and stores them in `localStorage`. It encrypts the stored record using AES-256-CBC with a PBKDF2-derived key (100,000 iterations) and checks an HMAC of the ciphertext. The IV and other encryption metadata are not authenticated, so the HMAC does not protect the entire stored record. Client-side code must have access to the configured passphrase and decrypted tokens: encryption does not protect them from malicious page scripts, including scripts running through XSS. A passphrase included in frontend code or configuration must not be treated as a secret.
+The credentials flow receives access and refresh tokens in JSON and stores them in `localStorage`. The versioned record uses AES-256-CBC and an HMAC over the version, salt, IV and ciphertext, with separate keys derived from the passphrase using PBKDF2-SHA256 (100,000 iterations). Client-side code must have access to the configured passphrase and decrypted tokens: encryption does not protect them from malicious page scripts, including scripts running through XSS. A passphrase included in frontend code or configuration must not be treated as a secret.
+
+**Upgrade:** Sessions stored by earlier versions use a format whose IV was not authenticated. They cannot be safely verified or migrated, so the library removes those records on first read and users must sign in again. New sign-ins use the authenticated format. Older versions cannot read the new format; avoid deploying mixed versions against the same storage.
 
 The stored record also contains a marker derived from browser properties. On an uncached read, a mismatch causes the local record to be removed. Browser properties can change, and the marker can be copied or imitated. This check neither proves token theft nor binds tokens to a browser on the server; a stolen bearer token can be replayed independently of it.
 

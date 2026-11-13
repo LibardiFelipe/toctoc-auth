@@ -1,119 +1,89 @@
 import CryptoJS from "crypto-js";
 
+const VERSION = "toctoc:v2:";
 const ITERATION_COUNT = 100000;
-const KEY_SIZE = 256 / 32; // 256 bits (8 words)
-const SALT_SIZE = 16; // 16 bytes (4 words)
-const IV_SIZE = 16; // 16 bytes (4 words)
-const HMAC_SIZE = 32; // 32 bytes (8 words)
+const KEY_WORDS = 256 / 32;
+const SALT_SIZE = 16;
+const IV_SIZE = 16;
+const HMAC_SIZE = 32;
+const BLOCK_SIZE = 16;
 
-/**
- * Derives a cryptographic key from a password using PBKDF2.
- */
-const deriveKey = (
-  password: string,
-  salt: CryptoJS.lib.WordArray
-): CryptoJS.lib.WordArray => {
-  return CryptoJS.PBKDF2(password, salt, {
-    keySize: KEY_SIZE,
+// Derive independent encryption and authentication keys from the same salt.
+const deriveKeys = (password: string, salt: CryptoJS.lib.WordArray) => {
+  const material = CryptoJS.PBKDF2(password, salt, {
+    keySize: KEY_WORDS * 2,
     iterations: ITERATION_COUNT,
     hasher: CryptoJS.algo.SHA256,
   });
+  return {
+    encryption: CryptoJS.lib.WordArray.create(material.words.slice(0, KEY_WORDS), 32),
+    authentication: CryptoJS.lib.WordArray.create(material.words.slice(KEY_WORDS), 32),
+  };
 };
 
-/**
- * Encrypts data using AES-256-CBC with PBKDF2 key derivation and HMAC integrity.
- *
- * Output format: Base64(salt[16] + iv[16] + hmac[32] + ciphertext)
- */
+const slice = (data: CryptoJS.lib.WordArray, start: number, length: number) =>
+  CryptoJS.lib.WordArray.create(data.words.slice(start / 4, (start + length) / 4), length);
+
+// The version is included in the MAC along with the salt, IV and ciphertext.
+const authenticate = (payload: CryptoJS.lib.WordArray, key: CryptoJS.lib.WordArray) =>
+  CryptoJS.HmacSHA256(CryptoJS.enc.Utf8.parse(VERSION).concat(payload.clone()), key);
+
+/** Creates a versioned encrypt-then-MAC record: version + Base64(salt || IV || ciphertext || MAC). */
 const encrypt = (data: string, key: string): string => {
   const salt = CryptoJS.lib.WordArray.random(SALT_SIZE);
   const iv = CryptoJS.lib.WordArray.random(IV_SIZE);
-  const derivedKey = deriveKey(key, salt);
-
-  const encrypted = CryptoJS.AES.encrypt(data, derivedKey, {
-    iv: iv,
+  const keys = deriveKeys(key, salt);
+  const ciphertext = CryptoJS.AES.encrypt(data, keys.encryption, {
+    iv,
     mode: CryptoJS.mode.CBC,
     padding: CryptoJS.pad.Pkcs7,
-  });
-
-  // Create HMAC for integrity verification (encrypt-then-MAC)
-  const ciphertextHex = encrypted.ciphertext.toString(CryptoJS.enc.Hex);
-  const hmac = CryptoJS.HmacSHA256(ciphertextHex, derivedKey);
-
-  // Combine: salt + iv + hmac + ciphertext
-  const combined = salt.concat(iv).concat(hmac).concat(encrypted.ciphertext);
-
-  return combined.toString(CryptoJS.enc.Base64);
+  }).ciphertext;
+  const payload = salt.clone().concat(iv).concat(ciphertext);
+  return VERSION + payload.concat(authenticate(payload, keys.authentication)).toString(CryptoJS.enc.Base64);
 };
 
-/**
- * Decrypts data encrypted with the encrypt function.
- * Verifies HMAC integrity before decryption.
- *
- * @throws Error if decryption fails or integrity check fails
- */
+/** Rejects legacy and unknown formats, then verifies the complete record before decrypting. */
 const decrypt = (data: string, key: string): string => {
-  const combined = CryptoJS.enc.Base64.parse(data);
-
-  // Minimum size: salt(4) + iv(4) + hmac(8) + at least 1 word of ciphertext
-  if (combined.sigBytes < SALT_SIZE + IV_SIZE + HMAC_SIZE + 4) {
+  if (!data.startsWith(VERSION)) {
+    throw new Error("Decryption failed: unsupported storage format; sign in again");
+  }
+  const encoded = data.slice(VERSION.length);
+  // CryptoJS's Base64 parser is permissive, so require a canonical encoding.
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+    throw new Error("Decryption failed: invalid data format");
+  }
+  const combined = CryptoJS.enc.Base64.parse(encoded);
+  const payloadSize = combined.sigBytes - HMAC_SIZE;
+  const ciphertextSize = payloadSize - SALT_SIZE - IV_SIZE;
+  if (ciphertextSize < BLOCK_SIZE || ciphertextSize % BLOCK_SIZE !== 0 ||
+      combined.toString(CryptoJS.enc.Base64) !== encoded) {
     throw new Error("Decryption failed: invalid data format");
   }
 
-  const words = combined.words;
-  const saltWords = 4; // 16 bytes / 4 bytes per word
-  const ivWords = 4; // 16 bytes / 4 bytes per word
-  const hmacWords = 8; // 32 bytes / 4 bytes per word
-
-  // Extract components
-  const salt = CryptoJS.lib.WordArray.create(
-    words.slice(0, saltWords),
-    SALT_SIZE
-  );
-  const iv = CryptoJS.lib.WordArray.create(
-    words.slice(saltWords, saltWords + ivWords),
-    IV_SIZE
-  );
-  const storedHmac = CryptoJS.lib.WordArray.create(
-    words.slice(saltWords + ivWords, saltWords + ivWords + hmacWords),
-    HMAC_SIZE
-  );
-  const ciphertext = CryptoJS.lib.WordArray.create(
-    words.slice(saltWords + ivWords + hmacWords),
-    combined.sigBytes - SALT_SIZE - IV_SIZE - HMAC_SIZE
-  );
-
-  const derivedKey = deriveKey(key, salt);
-
-  // Verify HMAC before decryption (prevents padding oracle attacks)
-  const ciphertextHex = ciphertext.toString(CryptoJS.enc.Hex);
-  const computedHmac = CryptoJS.HmacSHA256(ciphertextHex, derivedKey);
-
-  if (storedHmac.toString() !== computedHmac.toString()) {
-    throw new Error(
-      "Decryption failed: data integrity check failed - possible tampering"
-    );
+  const payload = slice(combined, 0, payloadSize);
+  const salt = slice(payload, 0, SALT_SIZE);
+  const iv = slice(payload, SALT_SIZE, IV_SIZE);
+  const ciphertext = slice(payload, SALT_SIZE + IV_SIZE, ciphertextSize);
+  const storedHmac = slice(combined, payloadSize, HMAC_SIZE);
+  const keys = deriveKeys(key, salt);
+  const expectedHmac = authenticate(payload, keys.authentication);
+  let difference = 0;
+  for (let i = 0; i < HMAC_SIZE / 4; i++) {
+    difference |= storedHmac.words[i] ^ expectedHmac.words[i];
+  }
+  if (difference !== 0) {
+    throw new Error("Decryption failed: data integrity check failed");
   }
 
   const decrypted = CryptoJS.AES.decrypt(
-    { ciphertext: ciphertext } as CryptoJS.lib.CipherParams,
-    derivedKey,
-    {
-      iv: iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
-    }
-  );
-
-  const result = decrypted.toString(CryptoJS.enc.Utf8);
-  if (!result) {
+    { ciphertext } as CryptoJS.lib.CipherParams,
+    keys.encryption,
+    { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+  ).toString(CryptoJS.enc.Utf8);
+  if (!decrypted) {
     throw new Error("Decryption failed: invalid key or corrupted data");
   }
-
-  return result;
+  return decrypted;
 };
 
-export const cryptoService = {
-  encrypt,
-  decrypt,
-};
+export const cryptoService = { encrypt, decrypt };
