@@ -1,4 +1,7 @@
 // Payload decoding is not signature verification and must not be used for authorization.
+export const isNonemptyToken = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
 export const getTokenExpiration = (token: string): number | undefined => {
   try {
     const parts = token.split(".");

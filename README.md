@@ -343,7 +343,7 @@ Content-Type: application/json
 }
 ```
 
-The endpoint should return the same response format as your login endpoint, containing new access and refresh tokens.
+The endpoint should return the same response format as your login endpoint, containing new access and refresh tokens. Both login and refresh responses must provide each token as a nonempty string containing at least one non-whitespace character. Token strings are stored unchanged.
 
 ## Advanced Features
 

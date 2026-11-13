@@ -244,3 +244,39 @@ test("redirects preserve query values, short paths, and fragments", async () => 
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test("invalid login and refresh tokens are never persisted", async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/fixture.js") {
+      res.setHeader("Content-Type", "application/javascript");
+      res.end(fs.readFileSync("dist/tests/browser-fixture.js"));
+    } else if (req.url === "/login" || req.url === "/refresh") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ accessToken: req.url === "/login" ? 123 : "new-access", refreshToken: "  ", user: { role: "admin" } }));
+    } else if (req.url === "/protected") {
+      res.statusCode = 401;
+      res.end("{}");
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.end('<script src="/fixture.js"></script>');
+    }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH || undefined });
+    const page = await browser.newPage();
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => fixture.init());
+    await page.evaluate(() => fixture.mount());
+    await page.waitForFunction(() => JSON.parse(document.querySelector("#status")?.textContent || "{}").authenticated);
+    const before = await page.evaluate(() => fixture.session());
+    await assert.rejects(page.evaluate(() => fixture.login()));
+    assert.deepEqual(await page.evaluate(() => fixture.session()), before);
+    await assert.rejects(page.evaluate(() => fixture.call()));
+    assert.equal(await page.evaluate(() => fixture.session()), null);
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

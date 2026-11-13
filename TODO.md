@@ -19,7 +19,7 @@ Findings from the library review, ordered by severity. Check items off when the 
 - 5 [x] Implement documented HTTP-status retries explicitly, and make retries safe for non-idempotent registration and rotating refresh operations. (`src/services/credentials-service.ts`, `src/libs/retry-utils.ts`)
 - 7 [x] Make provider rendering safe without browser storage, including SSR and blocked storage; define hydration behavior. (`src/providers/toctoc-provider.tsx`, `src/services/localStorage-service.ts`)
 - 8 [x] Preserve encoded redirect values, existing target query parameters, and short query strings when constructing redirects. (`src/libs/url-validator.ts`, `src/components/toctoc-redirect.tsx`)
-- 9 [ ] Validate that access and refresh tokens in successful responses are nonempty strings before storing them. (`src/services/credentials-service.ts`)
+- 9 [x] Validate that access and refresh tokens in successful responses are nonempty strings before storing them. (`src/services/credentials-service.ts`)
 - 10 [ ] Allow refresh responses to omit user data when the existing user should be retained, or explicitly document and enforce the requirement. (`src/services/credentials-service.ts`)
 - 11 [ ] Handle empty and non-JSON responses from authentication endpoints without losing useful status and error information. (`src/services/credentials-service.ts`)
 - 12 [ ] Make the storage key configurable or namespaced so independent configurations do not overwrite each other; avoid deleting a record merely because a different key cannot decrypt it. (`src/providers/toctoc-provider.tsx`, `src/services/localStorage-service.ts`)

@@ -7,8 +7,20 @@ import {
 } from "../libs";
 import { type TocTocAuthConfig, type TocTocResult } from "../types";
 import { isRetryableStatus } from "../libs/retry-utils";
+import { isNonemptyToken } from "../libs/token-utils";
 
 const { nameOf, hasNestedProperty } = utils;
+
+const validateTokens = (body: unknown, accessPath: string[], refreshPath: string[], endpoint: string, userMessage: string) => {
+  for (const path of [accessPath, refreshPath]) {
+    if (!isNonemptyToken(utils.getNestedProperty<unknown>(body, path))) {
+      throw createConfigError(
+        `The response body from '${endpoint}' must contain a nonempty string at '${path.join(".")}'. Please check the API implementation.`,
+        userMessage
+      );
+    }
+  }
+};
 
 const registerAsync = async <TResponse>(
   config: TocTocAuthConfig,
@@ -128,6 +140,9 @@ const loginAsync = async <TResponse>(
     );
   }
 
+  validateTokens(body, accessTokenPath, refreshTokenPath,
+    path, "Authentication failed. Please try again.");
+
   if (userPath && !hasNestedProperty(body, userPath)) {
     throw createConfigError(
       `The response body from '${nameOf(
@@ -228,6 +243,9 @@ const refreshTokenAsync = async <TResponse>(
       "Token refresh failed. Please sign in again."
     );
   }
+
+  validateTokens(body, accessTokenPath, refreshTokenPath,
+    path, "Token refresh failed. Please sign in again.");
 
   if (userPath && !hasNestedProperty(body, userPath)) {
     throw createConfigError(

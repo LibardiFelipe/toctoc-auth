@@ -5,6 +5,7 @@ import { type TocTocAuthConfig, type TocTocAuthContent } from "../types";
 import { TOCTOC_AUTH_CACHE_KEY } from "../providers/toctoc-provider";
 import { createSessionId, hasSessionLock, withSessionLock } from "./refresh-manager";
 import { advanceSessionGeneration, getSessionGeneration } from "./session-generation";
+import { isNonemptyToken } from "../libs/token-utils";
 
 type SessionSnapshot = {
   generation: number;
@@ -92,7 +93,7 @@ export const createTocTocAxiosWrapper = (tocTocConfig: TocTocAuthConfig, api: Ax
             tocTocConfig.providers.credentials?.signInJsonResponseAccessTokenLocation ?? ["accessToken"]);
           const refreshToken = utils.getNestedProperty<string>(response.responseBody,
             tocTocConfig.providers.credentials?.signInJsonResponseRefreshTokenLocation ?? ["refreshToken"]);
-          if (!accessToken || !refreshToken || typeof accessToken !== "string" || typeof refreshToken !== "string") {
+          if (!isNonemptyToken(accessToken) || !isNonemptyToken(refreshToken)) {
             throw new Error("Refresh response did not contain valid tokens");
           }
           const user = utils.getNestedProperty<object>(response.responseBody,
