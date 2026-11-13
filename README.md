@@ -243,6 +243,15 @@ The provider updates authentication and user state after library-managed session
 including token refresh, and when another tab changes or clears local storage. Direct
 localStorage writes in the same tab do not notify the provider.
 
+For JWT-shaped access tokens, `isAuthenticated` is false when the `exp` claim is
+missing, invalid, or expired, and changes when the token expires. Opaque tokens are
+treated as authenticated while present because their expiration cannot be read.
+The stored session and `getUser()` remain available after expiration. The provider
+does not refresh on startup: a wrapped request can still send the stored token and
+refresh it after a 401, subject to the Web Locks requirements below. Applications
+that block all requests while unauthenticated must initiate that request themselves
+or ask the user to sign in again.
+
 ### Functions
 
 #### createTocTocAxiosWrapper(config, api)
@@ -264,6 +273,7 @@ Checks if a JWT token has expired by decoding its payload and comparing the `exp
 
 - `token: string` — The JWT token to check
 - Returns `true` if the token is expired or invalid, `false` otherwise
+- Decodes the payload only; it does not verify the JWT signature or establish authorization.
 
 ```tsx
 import { isTokenExpired } from "toctoc-auth";

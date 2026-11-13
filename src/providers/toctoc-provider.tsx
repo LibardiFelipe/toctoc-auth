@@ -6,6 +6,7 @@ import { TocTocAuthContext, TocTocConfigContext } from "../contexts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { advanceSessionGeneration } from "../services/session-generation";
 import { createSessionId, withOptionalSessionLock } from "../services/refresh-manager";
+import { getTokenExpiration } from "../libs/token-utils";
 
 export type TocTocAuthConfig = {
   apiBaseUrl: string;
@@ -55,6 +56,17 @@ export const TocTocAuthProvider = ({
   const [authContent, setAuthContent] = useState(() =>
     localStorageService.getItem<TocTocAuthContent>(TOCTOC_AUTH_CACHE_KEY, config.encryptionKey)
   );
+  const [expirationTick, setExpirationTick] = useState(0);
+  const accessToken = authContent?.accessToken;
+  const jwtLike = typeof accessToken === "string" && accessToken.split(".").length === 3;
+  const expiration = jwtLike ? getTokenExpiration(accessToken) : undefined;
+
+  useEffect(() => {
+    if (expiration === undefined || expiration <= Date.now()) return;
+    const timer = setTimeout(() => setExpirationTick(tick => tick + 1),
+      Math.min(expiration - Date.now(), 2147483647));
+    return () => clearTimeout(timer);
+  }, [expiration, expirationTick]);
 
   useEffect(() => {
     const update = () => setAuthContent(
@@ -191,10 +203,8 @@ export const TocTocAuthProvider = ({
     }
   }, [credentials, navigate]);
 
-  const isAuthenticated = useMemo(
-    () => !!authContent?.accessToken,
-    [authContent?.accessToken]
-  );
+  const isAuthenticated = !!accessToken &&
+    (!jwtLike || (expiration !== undefined && expiration > Date.now()));
 
   const contextValue = useMemo(
     () => ({

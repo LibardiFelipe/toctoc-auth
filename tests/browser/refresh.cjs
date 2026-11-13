@@ -102,3 +102,58 @@ test("providers synchronize login, refresh, and session clearing across tabs", a
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test("expired JWTs start unauthenticated and refresh on a wrapped 401", async () => {
+  const jwt = exp => `e30.${Buffer.from(JSON.stringify({ exp })).toString("base64url")}.signature`;
+  const expired = jwt(Math.floor(Date.now() / 1000) - 10);
+  const valid = jwt(Math.floor(Date.now() / 1000) + 3600);
+  let refreshes = 0;
+  const server = http.createServer((req, res) => {
+    if (req.url === "/fixture.js") {
+      res.setHeader("Content-Type", "application/javascript");
+      res.end(fs.readFileSync("dist/tests/browser-fixture.js"));
+    } else if (req.url === "/refresh") {
+      refreshes++;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ accessToken: valid, refreshToken: "rotated", user: { role: "admin" } }));
+    } else if (req.url === "/protected") {
+      res.statusCode = req.headers.authorization === `Bearer ${valid}` ? 200 : 401;
+      res.end("{}");
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.end('<script src="/fixture.js"></script>');
+    }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH || undefined });
+    const context = await browser.newContext();
+    const first = await context.newPage();
+    const second = await context.newPage();
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await first.goto(url);
+    await first.evaluate(token => fixture.initToken(token), expired);
+    await second.goto(url);
+    await Promise.all([first.evaluate(() => fixture.mount()), second.evaluate(() => fixture.mount())]);
+    const expectStatus = (page, authenticated, role) => page.waitForFunction(({ authenticated, role }) => {
+      const status = document.querySelector("#status")?.textContent;
+      if (!status) return false;
+      const value = JSON.parse(status);
+      return value.authenticated === authenticated && value.user?.role === role;
+    }, { authenticated, role });
+    await Promise.all([expectStatus(first, false, "member"), expectStatus(second, false, "member")]);
+    assert.equal(refreshes, 0);
+    assert.deepEqual(await Promise.all([first.evaluate(() => fixture.call()), second.evaluate(() => fixture.call())]), [200, 200]);
+    await Promise.all([expectStatus(first, true, "admin"), expectStatus(second, true, "admin")]);
+    assert.equal(refreshes, 1);
+    await first.evaluate(token => fixture.initToken(token), jwt(Math.floor(Date.now() / 1000) + 3));
+    await expectStatus(first, true, "member");
+    await Promise.all([expectStatus(first, false, "member"), expectStatus(second, false, "member")]);
+    await first.evaluate(() => fixture.initToken("e30.e30.signature"));
+    await expectStatus(first, false, "member");
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

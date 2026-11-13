@@ -16,6 +16,9 @@ const config = { apiBaseUrl: location.origin, encryptionKey: "test", providers: 
 export const init = () => localStorageService.setItem("toctoc-auth", {
   provider: "credentials", accessToken: "old-access", refreshToken: "old-refresh", sessionId: "test-session", user: { role: "member" },
 }, "test");
+export const initToken = (accessToken: string) => localStorageService.setItem("toctoc-auth", {
+  provider: "credentials", accessToken, refreshToken: "old-refresh", sessionId: "test-session", user: { role: "member" },
+}, "test");
 export const call = () => createTocTocAxiosWrapper(config, axios.create({ baseURL: location.origin }))
   .get("/protected").then(response => response.status);
 export const session = () => localStorageService.getItem("toctoc-auth", "test");
